@@ -37,6 +37,10 @@ Issues = "https://github.com/millerlai/agent-radar/issues"
 [project.scripts]
 agent-radar = "agent_radar.cli:main"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["agent_radar"]
 
