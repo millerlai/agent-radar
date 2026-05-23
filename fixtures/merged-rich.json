@@ -1,0 +1,350 @@
+{
+  "dimensions": {
+    "claude_md": "CLAUDE.md 成熟度",
+    "skills": "Skills 運用",
+    "mcp": "MCP 整合",
+    "automation": "自動化",
+    "context_hygiene": "情境衛生",
+    "iteration": "迭代與維護"
+  },
+  "usage_dimensions": {
+    "claude_md": "CLAUDE.md 生效度 (間接)",
+    "skills": "Skills 運用",
+    "mcp": "MCP 運用",
+    "automation": "自動化運用",
+    "context_hygiene": "情境引用",
+    "iteration": "迭代與維護"
+  },
+  "levels": [
+    [
+      0,
+      "L0 · 未使用 (Unaware)"
+    ],
+    [
+      20,
+      "L1 · 萌芽 (Reactive)"
+    ],
+    [
+      40,
+      "L2 · 結構化 (Structured)"
+    ],
+    [
+      60,
+      "L3 · 進階 (Advanced)"
+    ],
+    [
+      80,
+      "L4 · 精煉 (Mastery)"
+    ]
+  ],
+  "targets": [
+    {
+      "name": "agent-radar",
+      "path": "D:\\project\\agent-radar",
+      "level": "L4 · 精煉 (Mastery)",
+      "config_overall": 92.5,
+      "usage_overall": 80.4,
+      "scores": {
+        "claude_md": {
+          "config": 91.4,
+          "usage": 80.0,
+          "gap": 11.4
+        },
+        "skills": {
+          "config": 86.4,
+          "usage": 80.0,
+          "gap": 6.4
+        },
+        "mcp": {
+          "config": 100.0,
+          "usage": 50.0,
+          "gap": 50.0
+        },
+        "automation": {
+          "config": 100.0,
+          "usage": 100.0,
+          "gap": 0.0
+        },
+        "context_hygiene": {
+          "config": 100.0,
+          "usage": 92.0,
+          "gap": 8.0
+        },
+        "iteration": {
+          "config": 76.0,
+          "usage": null,
+          "gap": null
+        }
+      },
+      "config_findings_by_dim": {
+        "claude_md": [
+          {
+            "dimension": "claude_md",
+            "label": "CLAUDE.md 存在",
+            "weight": 25,
+            "score": 25,
+            "detail": "找到 CLAUDE.md"
+          },
+          {
+            "dimension": "claude_md",
+            "label": "結構化分區",
+            "weight": 20,
+            "score": 18,
+            "detail": "5 個標題, 命中 4 個分區關鍵字"
+          },
+          {
+            "dimension": "claude_md",
+            "label": "指令式語氣",
+            "weight": 15,
+            "score": 12,
+            "detail": "8 處規範語句"
+          },
+          {
+            "dimension": "claude_md",
+            "label": "精簡度",
+            "weight": 15,
+            "score": 15,
+            "detail": "黃金區間"
+          },
+          {
+            "dimension": "claude_md",
+            "label": "@import 引用",
+            "weight": 10,
+            "score": 10,
+            "detail": "2 處 @ 引用"
+          },
+          {
+            "dimension": "claude_md",
+            "label": "Lint: 大小合理",
+            "weight": 15,
+            "score": 15,
+            "detail": "2345 chars (合規)"
+          }
+        ],
+        "skills": [
+          {
+            "dimension": "skills",
+            "label": "Skills 存在",
+            "weight": 35,
+            "score": 35,
+            "detail": "找到 6 個 SKILL.md"
+          },
+          {
+            "dimension": "skills",
+            "label": "description 品質",
+            "weight": 35,
+            "score": 28,
+            "detail": "description 平均品質佳"
+          },
+          {
+            "dimension": "skills",
+            "label": "Progressive disclosure",
+            "weight": 30,
+            "score": 24,
+            "detail": "主檔精簡 + 附屬檔拆分"
+          },
+          {
+            "dimension": "skills",
+            "label": "Lint: frontmatter & token 衛生",
+            "weight": 20,
+            "score": 18,
+            "detail": "frontmatter 合規 6/6"
+          }
+        ],
+        "mcp": [
+          {
+            "dimension": "mcp",
+            "label": "MCP server 數量",
+            "weight": 50,
+            "score": 50,
+            "detail": "4 個 MCP server"
+          },
+          {
+            "dimension": "mcp",
+            "label": "MCP 類型廣度",
+            "weight": 50,
+            "score": 51,
+            "detail": "涵蓋類別: data, saas, search"
+          }
+        ],
+        "automation": [
+          {
+            "dimension": "automation",
+            "label": "Hooks",
+            "weight": 30,
+            "score": 30,
+            "detail": "偵測到 hooks 設定"
+          },
+          {
+            "dimension": "automation",
+            "label": "Subagents",
+            "weight": 30,
+            "score": 30,
+            "detail": "3 個 subagent"
+          },
+          {
+            "dimension": "automation",
+            "label": "自訂 slash commands",
+            "weight": 25,
+            "score": 25,
+            "detail": "5 個自訂命令"
+          },
+          {
+            "dimension": "automation",
+            "label": "Plugins",
+            "weight": 15,
+            "score": 15,
+            "detail": "偵測到 plugin 使用"
+          }
+        ],
+        "context_hygiene": [
+          {
+            "dimension": "context_hygiene",
+            "label": "User/Project 分工",
+            "weight": 40,
+            "score": 40,
+            "detail": "同時具備 project 與 user-space 設定"
+          },
+          {
+            "dimension": "context_hygiene",
+            "label": "共享/個人設定區分",
+            "weight": 30,
+            "score": 30,
+            "detail": "settings.local.json 已 gitignore"
+          },
+          {
+            "dimension": "context_hygiene",
+            "label": "模組化引用",
+            "weight": 30,
+            "score": 30,
+            "detail": "2 處模組化引用"
+          }
+        ],
+        "iteration": [
+          {
+            "dimension": "iteration",
+            "label": "設定檔 git 迭代",
+            "weight": 60,
+            "score": 48,
+            "detail": "設定相關 commit 6 次"
+          },
+          {
+            "dimension": "iteration",
+            "label": "設定檔多樣性",
+            "weight": 40,
+            "score": 28,
+            "detail": "曾迭代 2 類設定檔"
+          }
+        ]
+      },
+      "usage_findings_by_dim": {
+        "claude_md": [
+          {
+            "label": "tool_decision 接受率 (間接)",
+            "weight": 100,
+            "score": 80.0,
+            "detail": "8/10 工具提議被接受 (reject_ratio=20.0%)"
+          }
+        ],
+        "skills": [
+          {
+            "label": "Skill 觸發次數",
+            "weight": 40,
+            "score": 40.0,
+            "detail": "4 次觸發 / 2 session (activation_rate=1.00)"
+          },
+          {
+            "label": "proactive 觸發比例",
+            "weight": 40,
+            "score": 20.0,
+            "detail": "2/4 為模型主動觸發 (50%) — 反映 description 觸發力"
+          },
+          {
+            "label": "至少用過 1 個 skill",
+            "weight": 20,
+            "score": 20.0,
+            "detail": "2 個 skill 被觸發過"
+          }
+        ],
+        "mcp": [
+          {
+            "label": "連線健康度",
+            "weight": 50,
+            "score": 37.5,
+            "detail": "connected=3, failed=1 (health=75%)"
+          },
+          {
+            "label": "被工具呼叫的 server 比例",
+            "weight": 50,
+            "score": 12.5,
+            "detail": "1/4 server 曾被呼叫 (configured 由 scan.json 提供)"
+          }
+        ],
+        "automation": [
+          {
+            "label": "Hook 觸發率",
+            "weight": 40,
+            "score": 40.0,
+            "detail": "3/1 已執行的 hook (100%)"
+          },
+          {
+            "label": "Plugin 載入比例",
+            "weight": 35,
+            "score": 35.0,
+            "detail": "2/1 plugin 載入 (100%)"
+          },
+          {
+            "label": "Subagent 使用",
+            "weight": 25,
+            "score": 25.0,
+            "detail": "2 種 subagent 被派遣"
+          }
+        ],
+        "context_hygiene": [
+          {
+            "label": "@ 引用頻率 (per session)",
+            "weight": 60,
+            "score": 60.0,
+            "detail": "4 次 @file 引用 / 2 session (rate=1.00)"
+          },
+          {
+            "label": "@ 解析成功率",
+            "weight": 40,
+            "score": 32.0,
+            "detail": "4/5 解析成功"
+          }
+        ],
+        "iteration": []
+      },
+      "top_gaps": [
+        {
+          "dimension": "mcp",
+          "gap": 50.0,
+          "config": 100.0,
+          "usage": 50.0,
+          "hint": "`agent-radar`：你設定了 MCP server，但實際被呼叫的比例偏低。檢查哪些 server 從未被使用，刪除或重新評估。"
+        },
+        {
+          "dimension": "claude_md",
+          "gap": 11.4,
+          "config": 91.4,
+          "usage": 80.0,
+          "hint": "`agent-radar`：CLAUDE.md 寫得齊全，但 tool_decision 顯示提議常被拒。回頭看哪些建議被拒，把規則明文寫進 CLAUDE.md。"
+        }
+      ],
+      "totals": {
+        "session_count": 2,
+        "active_seconds": 5400.0,
+        "skills_activated_total": 4,
+        "mcp_connected_total": 3,
+        "mcp_servers_invoked": 1,
+        "hooks_executed_total": 3,
+        "subagents_distinct": 2,
+        "tool_accepts": 8,
+        "tool_rejects": 2
+      },
+      "blind_spots": [],
+      "notes": []
+    }
+  ]
+}

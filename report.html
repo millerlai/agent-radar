@@ -47,6 +47,7 @@
   }
   h2 { font-size: 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
   h2::before { content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
+  .card-sub { color: var(--ink-dim); font-size: 13.5px; max-width: 70ch; margin: -8px 0 18px; }
 
   .radar-wrap { display: grid; grid-template-columns: 1.1fr .9fr; gap: 24px; align-items: center; }
   @media (max-width: 760px) { .radar-wrap { grid-template-columns: 1fr; } }
@@ -151,75 +152,40 @@
 <text x="68.6" y="323.2" text-anchor="end" class="axis-label" dominant-baseline="middle">情境衛生</text>
 <line x1="230.0" y1="230.0" x2="94.6" y2="151.8" class="axis"/>
 <text x="68.6" y="136.8" text-anchor="end" class="axis-label" dominant-baseline="middle">迭代與維護</text>
-<polygon points="230.0,164.6 230.0,230.0 230.0,230.0 230.0,230.0 202.9,245.6 230.0,230.0" fill="#4ade80" fill-opacity="0.12" stroke="#4ade80" stroke-width="2.5" class="series" style="--c:#4ade80"/>
-<circle cx="230.0" cy="164.6" r="3.5" fill="#4ade80"/>
+<polygon points="230.0,105.7 230.0,230.0 230.0,230.0 230.0,230.0 162.3,269.1 200.2,212.8" fill="#4ade80" fill-opacity="0.12" stroke="#4ade80" stroke-width="2.5" class="series" style="--c:#4ade80"/>
+<circle cx="230.0" cy="105.7" r="3.5" fill="#4ade80"/>
 <circle cx="230.0" cy="230.0" r="3.5" fill="#4ade80"/>
 <circle cx="230.0" cy="230.0" r="3.5" fill="#4ade80"/>
 <circle cx="230.0" cy="230.0" r="3.5" fill="#4ade80"/>
-<circle cx="202.9" cy="245.6" r="3.5" fill="#4ade80"/>
-<circle cx="230.0" cy="230.0" r="3.5" fill="#4ade80"/>
-<polygon points="230.0,109.4 279.0,201.7 230.0,230.0 230.0,230.0 202.9,245.6 148.7,183.1" fill="#38bdf8" fill-opacity="0.12" stroke="#38bdf8" stroke-width="2.5" class="series" style="--c:#38bdf8"/>
-<circle cx="230.0" cy="109.4" r="3.5" fill="#38bdf8"/>
-<circle cx="279.0" cy="201.7" r="3.5" fill="#38bdf8"/>
-<circle cx="230.0" cy="230.0" r="3.5" fill="#38bdf8"/>
-<circle cx="230.0" cy="230.0" r="3.5" fill="#38bdf8"/>
-<circle cx="202.9" cy="245.6" r="3.5" fill="#38bdf8"/>
-<circle cx="148.7" cy="183.1" r="3.5" fill="#38bdf8"/>
-<polygon points="230.0,105.8 347.0,162.4 365.4,308.2 230.0,375.5 121.6,292.6 121.6,167.4" fill="#fbbf24" fill-opacity="0.12" stroke="#fbbf24" stroke-width="2.5" class="series" style="--c:#fbbf24"/>
-<circle cx="230.0" cy="105.8" r="3.5" fill="#fbbf24"/>
-<circle cx="347.0" cy="162.4" r="3.5" fill="#fbbf24"/>
-<circle cx="365.4" cy="308.2" r="3.5" fill="#fbbf24"/>
-<circle cx="230.0" cy="375.5" r="3.5" fill="#fbbf24"/>
-<circle cx="121.6" cy="292.6" r="3.5" fill="#fbbf24"/>
-<circle cx="121.6" cy="167.4" r="3.5" fill="#fbbf24"/>
+<circle cx="162.3" cy="269.1" r="3.5" fill="#4ade80"/>
+<circle cx="200.2" cy="212.8" r="3.5" fill="#4ade80"/>
 </svg>
-        <div class="legend"><span class="leg"><i style="background:#4ade80"></i>novice <b>10</b></span><span class="leg"><i style="background:#38bdf8"></i>intermediate <b>32</b></span><span class="leg"><i style="background:#fbbf24"></i>advanced <b>86</b></span></div>
+        <div class="legend"><span class="leg"><i style="background:#4ade80"></i>agent-radar <b>25</b></span></div>
       </div>
       <div class="scale"><div class="lv"><b>L0</b><span>未使用 (Unaware)</span><i>0+</i></div><div class="lv"><b>L1</b><span>萌芽 (Reactive)</span><i>20+</i></div><div class="lv"><b>L2</b><span>結構化 (Structured)</span><i>40+</i></div><div class="lv"><b>L3</b><span>進階 (Advanced)</span><i>60+</i></div><div class="lv"><b>L4</b><span>精煉 (Mastery)</span><i>80+</i></div></div>
     </section>
 
     
-        <section class="card">
-          <h2>團隊排行 · Team Benchmark</h2>
-          <table class="rank-table">
-            <thead><tr><th>#</th><th>目標</th><th>總分</th><th>層級</th></tr></thead>
-            <tbody><tr>
-                  <td class="rank">1</td>
-                  <td>advanced</td>
-                  <td><span class="pill good">86</span></td>
-                  <td class="lvl">L4 · 精煉 (Mastery)</td>
-                </tr><tr>
-                  <td class="rank">2</td>
-                  <td>intermediate</td>
-                  <td><span class="pill mid">32</span></td>
-                  <td class="lvl">L1 · 萌芽 (Reactive)</td>
-                </tr><tr>
-                  <td class="rank">3</td>
-                  <td>novice</td>
-                  <td><span class="pill low">10</span></td>
-                  <td class="lvl">L0 · 未使用 (Unaware)</td>
-                </tr></tbody>
-          </table>
-          <p class="team-avg">團隊平均成熟度 <b>43</b> / 100</p>
-        </section>
+
+    
 
     
       <section class="card target">
         <div class="target-head">
           <div>
-            <h3>novice</h3>
-            <code class="path">/home/claude/agent-radar/fixtures/novice</code>
+            <h3>agent-radar</h3>
+            <code class="path">D:\project\agent-radar</code>
           </div>
           <div class="big-score low">
-            <span class="num">10</span>
-            <span class="lvl-tag">L0 · 未使用 (Unaware)</span>
+            <span class="num">25</span>
+            <span class="lvl-tag">L1 · 萌芽 (Reactive)</span>
           </div>
         </div>
         
           <details class="dim-block">
             <summary>
               <span class="d-name">CLAUDE.md 成熟度</span>
-              <span class="d-score mid">42</span>
+              <span class="d-score good">80</span>
             </summary>
             <div class="findings">
               <div class="finding good">
@@ -230,29 +196,29 @@
                 <div class="f-bar"><i style="width:100%"></i></div>
                 <div class="f-detail">找到 CLAUDE.md</div>
               </div>
-              <div class="finding low">
+              <div class="finding good">
                 <div class="f-head">
                   <span class="f-label">結構化分區</span>
-                  <span class="f-score">2/20</span>
+                  <span class="f-score">20/20</span>
                 </div>
-                <div class="f-bar"><i style="width:10%"></i></div>
-                <div class="f-detail">0 個標題, 命中 1 個分區關鍵字</div>
+                <div class="f-bar"><i style="width:100%"></i></div>
+                <div class="f-detail">5 個標題, 命中 1 個分區關鍵字</div>
               </div>
               <div class="finding low">
                 <div class="f-head">
                   <span class="f-label">指令式語氣</span>
-                  <span class="f-score">2/15</span>
+                  <span class="f-score">4/15</span>
                 </div>
-                <div class="f-bar"><i style="width:10%"></i></div>
-                <div class="f-detail">偵測到約 1 處祈使/規範語句</div>
+                <div class="f-bar"><i style="width:30%"></i></div>
+                <div class="f-detail">偵測到約 3 處祈使/規範語句</div>
               </div>
-              <div class="finding mid">
+              <div class="finding good">
                 <div class="f-head">
                   <span class="f-label">精簡度 (非散文堆疊)</span>
-                  <span class="f-score">7/15</span>
+                  <span class="f-score">15/15</span>
                 </div>
-                <div class="f-bar"><i style="width:47%"></i></div>
-                <div class="f-detail">約 43 字</div>
+                <div class="f-bar"><i style="width:100%"></i></div>
+                <div class="f-detail">約 358 字</div>
               </div>
               <div class="finding low">
                 <div class="f-head">
@@ -261,6 +227,14 @@
                 </div>
                 <div class="f-bar"><i style="width:0%"></i></div>
                 <div class="f-detail">未使用 @import 拆檔</div>
+              </div>
+              <div class="finding good">
+                <div class="f-head">
+                  <span class="f-label">Lint: 大小合理</span>
+                  <span class="f-score">15/15</span>
+                </div>
+                <div class="f-bar"><i style="width:100%"></i></div>
+                <div class="f-detail">2345 chars (合規)</div>
               </div></div>
           </details>
           <details class="dim-block">
@@ -292,6 +266,14 @@
                 </div>
                 <div class="f-bar"><i style="width:0%"></i></div>
                 <div class="f-detail">無 skills 可評估</div>
+              </div>
+              <div class="finding low">
+                <div class="f-head">
+                  <span class="f-label">Lint: frontmatter & token 衛生</span>
+                  <span class="f-score">0/20</span>
+                </div>
+                <div class="f-bar"><i style="width:0%"></i></div>
+                <div class="f-detail">無 skills 可評估</div>
               </div></div>
           </details>
           <details class="dim-block">
@@ -359,423 +341,7 @@
           <details class="dim-block">
             <summary>
               <span class="d-name">情境衛生</span>
-              <span class="d-score low">20</span>
-            </summary>
-            <div class="findings">
-              <div class="finding mid">
-                <div class="f-head">
-                  <span class="f-label">User/Project 分工</span>
-                  <span class="f-score">20/40</span>
-                </div>
-                <div class="f-bar"><i style="width:50%"></i></div>
-                <div class="f-detail">僅 project-space 設定 (建議補 ~/.claude 放個人通用偏好)</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">共享/個人設定區分</span>
-                  <span class="f-score">0/30</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">未區分共享與個人設定</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">模組化引用</span>
-                  <span class="f-score">0/30</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">未模組化拆檔</div>
-              </div></div>
-          </details>
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">迭代與維護</span>
-              <span class="d-score low">0</span>
-            </summary>
-            <div class="findings">
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">設定檔 git 迭代</span>
-                  <span class="f-score">0/60</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">非 git repo，無法評估迭代</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">設定檔多樣性</span>
-                  <span class="f-score">0/40</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">非 git repo</div>
-              </div></div>
-          </details>
-        <p class="blind"><span>盲區</span>此目標非 git repo，迭代維度無法評估，分數偏低屬正常。</p>
-      </section>
-      <section class="card target">
-        <div class="target-head">
-          <div>
-            <h3>intermediate</h3>
-            <code class="path">/home/claude/agent-radar/fixtures/intermediate</code>
-          </div>
-          <div class="big-score mid">
-            <span class="num">32</span>
-            <span class="lvl-tag">L1 · 萌芽 (Reactive)</span>
-          </div>
-        </div>
-        
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">CLAUDE.md 成熟度</span>
-              <span class="d-score good">77</span>
-            </summary>
-            <div class="findings">
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">CLAUDE.md 存在</span>
-                  <span class="f-score">25/25</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">找到 CLAUDE.md</div>
-              </div>
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">結構化分區</span>
-                  <span class="f-score">20/20</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">4 個標題, 命中 9 個分區關鍵字</div>
-              </div>
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">指令式語氣</span>
-                  <span class="f-score">14/15</span>
-                </div>
-                <div class="f-bar"><i style="width:90%"></i></div>
-                <div class="f-detail">偵測到約 9 處祈使/規範語句</div>
-              </div>
-              <div class="finding mid">
-                <div class="f-head">
-                  <span class="f-label">精簡度 (非散文堆疊)</span>
-                  <span class="f-score">7/15</span>
-                </div>
-                <div class="f-bar"><i style="width:47%"></i></div>
-                <div class="f-detail">約 66 字</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">@import 引用</span>
-                  <span class="f-score">0/10</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">未使用 @import 拆檔</div>
-              </div></div>
-          </details>
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">Skills 運用</span>
-              <span class="d-score mid">36</span>
-            </summary>
-            <div class="findings">
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">Skills 存在</span>
-                  <span class="f-score">35/35</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">找到 1 個 SKILL.md</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">description 品質</span>
-                  <span class="f-score">1/35</span>
-                </div>
-                <div class="f-bar"><i style="width:3%"></i></div>
-                <div class="f-detail">description 平均品質 (含觸發描述)</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">Progressive disclosure</span>
-                  <span class="f-score">0/30</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">主檔精簡 + 附屬檔拆分情況</div>
-              </div></div>
-          </details>
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">MCP 整合</span>
-              <span class="d-score low">0</span>
-            </summary>
-            <div class="findings">
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">MCP server 數量</span>
-                  <span class="f-score">0/50</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">未設定任何 MCP server</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">MCP 類型廣度</span>
-                  <span class="f-score">0/50</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">無法辨識類別</div>
-              </div></div>
-          </details>
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">自動化</span>
-              <span class="d-score low">0</span>
-            </summary>
-            <div class="findings">
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">Hooks</span>
-                  <span class="f-score">0/30</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">未使用 hooks</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">Subagents</span>
-                  <span class="f-score">0/30</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">未定義 subagents</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">自訂 slash commands</span>
-                  <span class="f-score">0/25</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">未建立自訂命令</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">Plugins</span>
-                  <span class="f-score">0/15</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">未使用 plugins</div>
-              </div></div>
-          </details>
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">情境衛生</span>
-              <span class="d-score low">20</span>
-            </summary>
-            <div class="findings">
-              <div class="finding mid">
-                <div class="f-head">
-                  <span class="f-label">User/Project 分工</span>
-                  <span class="f-score">20/40</span>
-                </div>
-                <div class="f-bar"><i style="width:50%"></i></div>
-                <div class="f-detail">僅 project-space 設定 (建議補 ~/.claude 放個人通用偏好)</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">共享/個人設定區分</span>
-                  <span class="f-score">0/30</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">未區分共享與個人設定</div>
-              </div>
-              <div class="finding low">
-                <div class="f-head">
-                  <span class="f-label">模組化引用</span>
-                  <span class="f-score">0/30</span>
-                </div>
-                <div class="f-bar"><i style="width:0%"></i></div>
-                <div class="f-detail">未模組化拆檔</div>
-              </div></div>
-          </details>
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">迭代與維護</span>
-              <span class="d-score good">60</span>
-            </summary>
-            <div class="findings">
-              <div class="finding mid">
-                <div class="f-head">
-                  <span class="f-label">設定檔 git 迭代</span>
-                  <span class="f-score">32/60</span>
-                </div>
-                <div class="f-bar"><i style="width:53%"></i></div>
-                <div class="f-detail">設定相關 commit 次數: CLAUDE.md=3, .claude/=1</div>
-              </div>
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">設定檔多樣性</span>
-                  <span class="f-score">28/40</span>
-                </div>
-                <div class="f-bar"><i style="width:70%"></i></div>
-                <div class="f-detail">曾迭代 2 類設定檔</div>
-              </div></div>
-          </details>
-        <p class="blind"><span>盲區</span>本工具只偵測『配置完整度』，無法得知這些設定在實際 session 中是否真的被觸發。建議接 OpenTelemetry 量測『實際運用度』，兩者落差即為改善空間。</p>
-      </section>
-      <section class="card target">
-        <div class="target-head">
-          <div>
-            <h3>advanced</h3>
-            <code class="path">/home/claude/agent-radar/fixtures/advanced</code>
-          </div>
-          <div class="big-score good">
-            <span class="num">86</span>
-            <span class="lvl-tag">L4 · 精煉 (Mastery)</span>
-          </div>
-        </div>
-        
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">CLAUDE.md 成熟度</span>
-              <span class="d-score good">79</span>
-            </summary>
-            <div class="findings">
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">CLAUDE.md 存在</span>
-                  <span class="f-score">25/25</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">找到 CLAUDE.md</div>
-              </div>
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">結構化分區</span>
-                  <span class="f-score">18/20</span>
-                </div>
-                <div class="f-bar"><i style="width:90%"></i></div>
-                <div class="f-detail">2 個標題, 命中 5 個分區關鍵字</div>
-              </div>
-              <div class="finding mid">
-                <div class="f-head">
-                  <span class="f-label">指令式語氣</span>
-                  <span class="f-score">8/15</span>
-                </div>
-                <div class="f-bar"><i style="width:50%"></i></div>
-                <div class="f-detail">偵測到約 5 處祈使/規範語句</div>
-              </div>
-              <div class="finding mid">
-                <div class="f-head">
-                  <span class="f-label">精簡度 (非散文堆疊)</span>
-                  <span class="f-score">7/15</span>
-                </div>
-                <div class="f-bar"><i style="width:47%"></i></div>
-                <div class="f-detail">約 41 字</div>
-              </div>
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">@import 引用</span>
-                  <span class="f-score">10/10</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">2 處 @ 引用</div>
-              </div></div>
-          </details>
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">Skills 運用</span>
-              <span class="d-score good">86</span>
-            </summary>
-            <div class="findings">
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">Skills 存在</span>
-                  <span class="f-score">35/35</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">找到 2 個 SKILL.md</div>
-              </div>
-              <div class="finding mid">
-                <div class="f-head">
-                  <span class="f-label">description 品質</span>
-                  <span class="f-score">21/35</span>
-                </div>
-                <div class="f-bar"><i style="width:61%"></i></div>
-                <div class="f-detail">description 平均品質 (含觸發描述)</div>
-              </div>
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">Progressive disclosure</span>
-                  <span class="f-score">30/30</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">主檔精簡 + 附屬檔拆分情況</div>
-              </div></div>
-          </details>
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">MCP 整合</span>
-              <span class="d-score good">100</span>
-            </summary>
-            <div class="findings">
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">MCP server 數量</span>
-                  <span class="f-score">50/50</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">4 個 MCP server</div>
-              </div>
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">MCP 類型廣度</span>
-                  <span class="f-score">50/50</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">涵蓋類別: data, saas, search</div>
-              </div></div>
-          </details>
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">自動化</span>
-              <span class="d-score good">93</span>
-            </summary>
-            <div class="findings">
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">Hooks</span>
-                  <span class="f-score">30/30</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">偵測到 hooks 設定</div>
-              </div>
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">Subagents</span>
-                  <span class="f-score">30/30</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">2 個 subagent</div>
-              </div>
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">自訂 slash commands</span>
-                  <span class="f-score">18/25</span>
-                </div>
-                <div class="f-bar"><i style="width:72%"></i></div>
-                <div class="f-detail">2 個自訂命令</div>
-              </div>
-              <div class="finding good">
-                <div class="f-head">
-                  <span class="f-label">Plugins</span>
-                  <span class="f-score">15/15</span>
-                </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">偵測到 plugin 使用</div>
-              </div></div>
-          </details>
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">情境衛生</span>
-              <span class="d-score good">80</span>
+              <span class="d-score mid">50</span>
             </summary>
             <div class="findings">
               <div class="finding mid">
@@ -794,39 +360,39 @@
                 <div class="f-bar"><i style="width:100%"></i></div>
                 <div class="f-detail">settings.local.json 已 gitignore</div>
               </div>
-              <div class="finding good">
+              <div class="finding low">
                 <div class="f-head">
                   <span class="f-label">模組化引用</span>
-                  <span class="f-score">30/30</span>
+                  <span class="f-score">0/30</span>
                 </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">2 處模組化引用</div>
+                <div class="f-bar"><i style="width:0%"></i></div>
+                <div class="f-detail">未模組化拆檔</div>
               </div></div>
           </details>
           <details class="dim-block">
             <summary>
               <span class="d-name">迭代與維護</span>
-              <span class="d-score good">80</span>
+              <span class="d-score low">22</span>
             </summary>
             <div class="findings">
-              <div class="finding good">
+              <div class="finding low">
                 <div class="f-head">
                   <span class="f-label">設定檔 git 迭代</span>
-                  <span class="f-score">40/60</span>
+                  <span class="f-score">8/60</span>
                 </div>
-                <div class="f-bar"><i style="width:67%"></i></div>
-                <div class="f-detail">設定相關 commit 次數: CLAUDE.md=2, .claude/=2, .mcp.json=1</div>
+                <div class="f-bar"><i style="width:13%"></i></div>
+                <div class="f-detail">設定相關 commit 次數: CLAUDE.md=1</div>
               </div>
-              <div class="finding good">
+              <div class="finding mid">
                 <div class="f-head">
                   <span class="f-label">設定檔多樣性</span>
-                  <span class="f-score">40/40</span>
+                  <span class="f-score">14/40</span>
                 </div>
-                <div class="f-bar"><i style="width:100%"></i></div>
-                <div class="f-detail">曾迭代 3 類設定檔</div>
+                <div class="f-bar"><i style="width:35%"></i></div>
+                <div class="f-detail">曾迭代 1 類設定檔</div>
               </div></div>
           </details>
-        <p class="blind"><span>盲區</span>本工具只偵測『配置完整度』，無法得知這些設定在實際 session 中是否真的被觸發。建議接 OpenTelemetry 量測『實際運用度』，兩者落差即為改善空間。</p>
+        
       </section>
 
     <footer>agent-radar · static fingerprint scan · 配置完整度 ≠ 實際運用度</footer>

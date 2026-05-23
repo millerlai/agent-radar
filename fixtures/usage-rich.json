@@ -1,0 +1,126 @@
+{
+  "usage_dimensions": {
+    "claude_md": "CLAUDE.md 生效度 (間接)",
+    "skills": "Skills 運用",
+    "mcp": "MCP 運用",
+    "automation": "自動化運用",
+    "context_hygiene": "情境引用",
+    "iteration": "迭代與維護"
+  },
+  "scan_context": {
+    "servers_configured": 4,
+    "hooks_registered": 1,
+    "subagents_defined": 3,
+    "plugins_installed": 1
+  },
+  "account_filter": null,
+  "targets_by_name": {
+    "agent-radar": {
+      "name": "agent-radar",
+      "scores": {
+        "claude_md": 80.0,
+        "skills": 80.0,
+        "mcp": 50.0,
+        "automation": 100.0,
+        "context_hygiene": 92.0,
+        "iteration": null
+      },
+      "overall": 80.4,
+      "findings_by_dim": {
+        "claude_md": [
+          {
+            "label": "tool_decision 接受率 (間接)",
+            "weight": 100,
+            "score": 80.0,
+            "detail": "8/10 工具提議被接受 (reject_ratio=20.0%)"
+          }
+        ],
+        "skills": [
+          {
+            "label": "Skill 觸發次數",
+            "weight": 40,
+            "score": 40.0,
+            "detail": "4 次觸發 / 2 session (activation_rate=1.00)"
+          },
+          {
+            "label": "proactive 觸發比例",
+            "weight": 40,
+            "score": 20.0,
+            "detail": "2/4 為模型主動觸發 (50%) — 反映 description 觸發力"
+          },
+          {
+            "label": "至少用過 1 個 skill",
+            "weight": 20,
+            "score": 20.0,
+            "detail": "2 個 skill 被觸發過"
+          }
+        ],
+        "mcp": [
+          {
+            "label": "連線健康度",
+            "weight": 50,
+            "score": 37.5,
+            "detail": "connected=3, failed=1 (health=75%)"
+          },
+          {
+            "label": "被工具呼叫的 server 比例",
+            "weight": 50,
+            "score": 12.5,
+            "detail": "1/4 server 曾被呼叫 (configured 由 scan.json 提供)"
+          }
+        ],
+        "automation": [
+          {
+            "label": "Hook 觸發率",
+            "weight": 40,
+            "score": 40.0,
+            "detail": "3/1 已執行的 hook (100%)"
+          },
+          {
+            "label": "Plugin 載入比例",
+            "weight": 35,
+            "score": 35.0,
+            "detail": "2/1 plugin 載入 (100%)"
+          },
+          {
+            "label": "Subagent 使用",
+            "weight": 25,
+            "score": 25.0,
+            "detail": "2 種 subagent 被派遣"
+          }
+        ],
+        "context_hygiene": [
+          {
+            "label": "@ 引用頻率 (per session)",
+            "weight": 60,
+            "score": 60.0,
+            "detail": "4 次 @file 引用 / 2 session (rate=1.00)"
+          },
+          {
+            "label": "@ 解析成功率",
+            "weight": 40,
+            "score": 32.0,
+            "detail": "4/5 解析成功"
+          }
+        ],
+        "iteration": []
+      },
+      "totals": {
+        "session_count": 2,
+        "active_seconds": 5400.0,
+        "skills_activated_total": 4,
+        "mcp_connected_total": 3,
+        "mcp_servers_invoked": 1,
+        "hooks_executed_total": 3,
+        "subagents_distinct": 2,
+        "tool_accepts": 8,
+        "tool_rejects": 2
+      },
+      "notes": [],
+      "window": {
+        "since": "1970-01-01T00:00:00+00:00",
+        "until": "2026-05-23T11:42:41.822915+00:00"
+      }
+    }
+  }
+}

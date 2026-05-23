@@ -19,6 +19,12 @@ from pathlib import Path
 PALETTE = ["#4ade80", "#38bdf8", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#2dd4bf", "#f87171"]
 
 
+def _polar_point(cx, cy, radius, value, i, n):
+    ang = -math.pi / 2 + (2 * math.pi * i / n)
+    r = radius * (value / 100)
+    return cx + r * math.cos(ang), cy + r * math.sin(ang)
+
+
 def radar_svg(targets, dim_keys, dim_labels, size=460, idx_offset=0):
     """產生多目標疊圖的雷達圖 SVG。"""
     cx = cy = size / 2
@@ -403,19 +409,465 @@ def build_html(data, session_data=None):
 </html>"""
 
 
+def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0):
+    """雙軌雷達:每個 target 同時畫實線 (config) + 虛線 (usage)。
+
+    iteration 維度的 usage 為 None (SPEC §6.6),usage polygon 以開口形式
+    繞過 iteration 軸,避免假裝 0 分。
+    """
+    cx = cy = size / 2
+    radius = size * 0.34
+    n = len(dim_keys)
+    rings = 4
+
+    parts = [f'<svg viewBox="0 0 {size} {size}" xmlns="http://www.w3.org/2000/svg" '
+             f'role="img" class="radar">']
+
+    # 同心格線
+    for ring in range(1, rings + 1):
+        rr = radius * ring / rings
+        pts = []
+        for i in range(n):
+            ang = -math.pi / 2 + (2 * math.pi * i / n)
+            pts.append(f"{cx + rr*math.cos(ang):.1f},{cy + rr*math.sin(ang):.1f}")
+        parts.append(f'<polygon points="{" ".join(pts)}" class="grid-ring"/>')
+
+    # 軸線 + 標籤
+    iteration_idx = None
+    for i, key in enumerate(dim_keys):
+        if key == "iteration":
+            iteration_idx = i
+        ang = -math.pi / 2 + (2 * math.pi * i / n)
+        ex, ey = cx + radius*math.cos(ang), cy + radius*math.sin(ang)
+        parts.append(f'<line x1="{cx}" y1="{cy}" x2="{ex:.1f}" y2="{ey:.1f}" class="axis"/>')
+        lx, ly = cx + (radius+30)*math.cos(ang), cy + (radius+30)*math.sin(ang)
+        anchor = "middle"
+        if math.cos(ang) > 0.3:
+            anchor = "start"
+        elif math.cos(ang) < -0.3:
+            anchor = "end"
+        label = dim_labels[key]
+        parts.append(
+            f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="{anchor}" '
+            f'class="axis-label" dominant-baseline="middle">{label}</text>')
+
+    # 每個 target 兩條多邊形 (config 實線 + usage 虛線)
+    for ti, t in enumerate(merged_targets):
+        color = PALETTE[(ti + idx_offset) % len(PALETTE)]
+
+        # config polygon (closed, solid)
+        cfg_pts = []
+        for i, key in enumerate(dim_keys):
+            v = t["scores"][key]["config"]
+            x, y = _polar_point(cx, cy, radius, v, i, n)
+            cfg_pts.append(f"{x:.1f},{y:.1f}")
+        parts.append(
+            f'<polygon points="{" ".join(cfg_pts)}" fill="{color}" '
+            f'fill-opacity="0.12" stroke="{color}" stroke-width="2.5" '
+            f'class="series" style="--c:{color}"/>')
+        for i, key in enumerate(dim_keys):
+            v = t["scores"][key]["config"]
+            x, y = _polar_point(cx, cy, radius, v, i, n)
+            parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="{color}"/>')
+
+        # usage polyline (open through vertices where value is not None)
+        usage_pts = []
+        for i, key in enumerate(dim_keys):
+            v = t["scores"][key]["usage"]
+            if v is None:
+                continue
+            x, y = _polar_point(cx, cy, radius, v, i, n)
+            usage_pts.append(f"{x:.1f},{y:.1f}")
+        if len(usage_pts) >= 2:
+            # closed only if iteration is absent (i.e., all dims have usage)
+            shape_tag = "polygon" if iteration_idx is None else "polyline"
+            parts.append(
+                f'<{shape_tag} points="{" ".join(usage_pts)}" fill="none" '
+                f'stroke="{color}" stroke-width="2" stroke-dasharray="6 4" '
+                f'stroke-opacity="0.95" class="usage-series"/>')
+        for i, key in enumerate(dim_keys):
+            v = t["scores"][key]["usage"]
+            if v is None:
+                continue
+            x, y = _polar_point(cx, cy, radius, v, i, n)
+            parts.append(
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="none" '
+                f'stroke="{color}" stroke-width="1.6"/>')
+
+    # iteration 軸標 N/A
+    if iteration_idx is not None:
+        ang = -math.pi / 2 + (2 * math.pi * iteration_idx / n)
+        nx = cx + (radius * 0.5) * math.cos(ang)
+        ny = cy + (radius * 0.5) * math.sin(ang)
+        parts.append(
+            f'<text x="{nx:.1f}" y="{ny:.1f}" text-anchor="middle" '
+            f'dominant-baseline="middle" class="na-tag">N/A</text>')
+
+    parts.append('</svg>')
+    return "\n".join(parts)
+
+
+def _gap_pill(gap):
+    """落差數值 → 帶顏色的 pill。gap 為 None → '—'。"""
+    if gap is None:
+        return '<span class="pill mid">—</span>'
+    cls = "good" if gap <= 15 else ("mid" if gap <= 35 else "low")
+    sign = "+" if gap > 0 else ""
+    return f'<span class="pill {cls}">{sign}{gap:.0f}</span>'
+
+
+def _score_pill(value):
+    if value is None:
+        return '<span class="pill mid">N/A</span>'
+    cls = "good" if value >= 60 else ("mid" if value >= 30 else "low")
+    return f'<span class="pill {cls}">{value:.0f}</span>'
+
+
+def gap_table_html(target, dim_labels):
+    rows = []
+    for dim, scores in target["scores"].items():
+        rows.append(f"""
+          <tr>
+            <td>{dim_labels.get(dim, dim)}</td>
+            <td>{_score_pill(scores['config'])}</td>
+            <td>{_score_pill(scores['usage'])}</td>
+            <td>{_gap_pill(scores['gap'])}</td>
+          </tr>""")
+    return f"""
+      <table class="gap-table">
+        <thead><tr><th>維度</th><th>配置</th><th>運用</th><th>落差</th></tr></thead>
+        <tbody>{''.join(rows)}</tbody>
+      </table>"""
+
+
+def top_gaps_html(merged_targets):
+    """整份報告中跨 target 撿出落差最大的前 5 項。"""
+    flat = []
+    for t in merged_targets:
+        for g in t.get("top_gaps", []):
+            flat.append({**g, "target": t["name"]})
+    flat.sort(key=lambda r: r["gap"], reverse=True)
+    top = flat[:5]
+    if not top:
+        return ""
+
+    rows = "".join(f"""
+      <li class="gap-item">
+        <div class="gap-rank">{i+1}</div>
+        <div class="gap-body">
+          <div class="gap-hint">{g['hint']}</div>
+          <div class="gap-meta">
+            <span>{g['target']}</span>
+            <span>· 配置 <b>{g['config']:.0f}</b></span>
+            <span>· 運用 <b>{(f"{g['usage']:.0f}" if g['usage'] is not None else 'N/A')}</b></span>
+            <span>· 落差 <b>{g['gap']:.0f}</b></span>
+          </div>
+        </div>
+      </li>""" for i, g in enumerate(top))
+
+    return f"""
+      <section class="card">
+        <h2>改善清單 · Top Gaps</h2>
+        <p class="card-sub">依「配置 vs 運用」落差排序的前 5 項。落差大 = 你配了但沒在用,
+        最有機會用最少力氣補上的能力。</p>
+        <ol class="gap-list">{rows}</ol>
+      </section>"""
+
+
+def merged_findings_html(target, dim_labels):
+    """合併視角:每個維度展開後左右並列 config / usage findings。"""
+    cfg_by = target.get("config_findings_by_dim", {})
+    use_by = target.get("usage_findings_by_dim", {})
+    blocks = []
+    for dim, scores in target["scores"].items():
+        cfg_rows = "".join(_finding_row(f) for f in cfg_by.get(dim, []))
+        use_rows = "".join(_finding_row(f) for f in use_by.get(dim, []))
+        tone_cfg = "good" if scores["config"] >= 60 else ("mid" if scores["config"] >= 30 else "low")
+        usage_label = (f'{scores["usage"]:.0f}' if scores["usage"] is not None else "N/A")
+        tone_use = "good" if (scores["usage"] or 0) >= 60 else ("mid" if (scores["usage"] or 0) >= 30 else "low")
+        if scores["usage"] is None:
+            tone_use = "mid"
+        gap_label = _gap_pill(scores["gap"])
+        blocks.append(f"""
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">{dim_labels.get(dim, dim)}</span>
+              <span class="d-dual">
+                <span class="d-score {tone_cfg}">{scores['config']:.0f}</span>
+                <span class="d-sep">/</span>
+                <span class="d-score {tone_use}">{usage_label}</span>
+                <span class="d-gap">{gap_label}</span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIG</div>
+                {cfg_rows or '<div class="f-detail">無 findings</div>'}
+              </div>
+              <div class="col">
+                <div class="col-head">運用 · USAGE</div>
+                {use_rows or '<div class="f-detail">無 usage 訊號</div>'}
+              </div>
+            </div>
+          </details>""")
+    return "".join(blocks)
+
+
+def _finding_row(f):
+    weight = f.get("weight") or 0
+    score = f.get("score") or 0
+    ratio = (score / weight) if weight else 0
+    state = "good" if ratio >= 0.66 else ("mid" if ratio >= 0.33 else "low")
+    return f"""
+      <div class="finding {state}">
+        <div class="f-head">
+          <span class="f-label">{f.get('label','')}</span>
+          <span class="f-score">{score:.0f}/{weight:.0f}</span>
+        </div>
+        <div class="f-bar"><i style="width:{ratio*100:.0f}%"></i></div>
+        <div class="f-detail">{f.get('detail','')}</div>
+      </div>"""
+
+
+# ----- additional CSS injected into the dual-radar page --------------------
+
+_MERGED_EXTRA_CSS = """
+  .usage-series { stroke-linejoin: round; stroke-linecap: round; }
+  .na-tag { fill: var(--ink-dim); font-family: 'JetBrains Mono'; font-size: 11px;
+            letter-spacing: .08em; }
+  .legend .leg .sub { font-size: 11px; color: var(--ink-dim); margin-left: 8px; }
+  .gap-table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  .gap-table th { text-align: left; font-size: 12px; color: var(--ink-dim);
+                  font-weight: 500; padding: 8px 10px;
+                  border-bottom: 1px solid var(--line); }
+  .gap-table td { padding: 10px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .d-dual { display: inline-flex; align-items: center; gap: 10px; }
+  .d-sep  { color: var(--ink-dim); font-family: 'JetBrains Mono'; }
+  .d-gap  { margin-left: 6px; }
+  .dual-findings { display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+                   padding: 8px 18px 16px; }
+  @media (max-width: 760px) { .dual-findings { grid-template-columns: 1fr; } }
+  .col-head { font-family: 'JetBrains Mono'; font-size: 11px; color: var(--accent);
+              letter-spacing: .15em; text-transform: uppercase; padding: 8px 0;
+              border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+  .gap-list { list-style: none; padding: 0; margin: 8px 0 0; }
+  .gap-item { display: flex; gap: 16px; padding: 14px 0;
+              border-bottom: 1px dashed var(--line); }
+  .gap-item:last-child { border-bottom: none; }
+  .gap-rank { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 22px;
+              color: var(--accent); min-width: 28px; }
+  .gap-hint { font-size: 14.5px; line-height: 1.55; }
+  .gap-meta { margin-top: 6px; color: var(--ink-dim); font-size: 12px;
+              display: flex; gap: 6px; flex-wrap: wrap; }
+  .gap-meta b { color: var(--ink); font-family: 'JetBrains Mono'; }
+  .dual-legend { display: flex; gap: 22px; flex-wrap: wrap; align-items: center;
+                 padding: 12px 14px; background: var(--panel-2);
+                 border: 1px solid var(--line); border-radius: 10px;
+                 margin-top: 14px; font-size: 13px; color: var(--ink-dim); }
+  .dual-legend .swatch { display: inline-flex; align-items: center; gap: 8px; }
+  .dual-legend .sw-line { display: inline-block; width: 26px; height: 0;
+                          border-top: 2.5px solid var(--ink); }
+  .dual-legend .sw-line.dashed { border-top-style: dashed; border-top-width: 2px; }
+"""
+
+
+def build_merged_html(merged):
+    """Render the dual-track (config vs usage) report."""
+    dim_keys = list(merged["dimensions"].keys())
+    dim_labels = merged["dimensions"]
+    targets = merged["targets"]
+
+    if not targets:
+        return "<html><body>No targets.</body></html>"
+
+    radar = dual_radar_svg(targets, dim_keys, dim_labels)
+
+    legend = "".join(
+        f'<span class="leg"><i style="background:{PALETTE[i%len(PALETTE)]}"></i>'
+        f'{t["name"]} '
+        f'<b>{(t["config_overall"] or 0):.0f}</b>'
+        f'<span class="sub">→ '
+        f'{(f"{t['usage_overall']:.0f}" if t.get("usage_overall") is not None else "N/A")}</span>'
+        f'</span>'
+        for i, t in enumerate(targets))
+
+    dual_legend = (
+        '<div class="dual-legend">'
+        '<span class="swatch"><span class="sw-line"></span>配置 · CONFIG (static fingerprint)</span>'
+        '<span class="swatch"><span class="sw-line dashed"></span>運用 · USAGE (OTel events)</span>'
+        '<span class="swatch">iteration 維度 · USAGE = N/A (無對應訊號)</span>'
+        '</div>')
+
+    # gap section per target
+    target_sections = "".join(f"""
+      <section class="card target">
+        <div class="target-head">
+          <div>
+            <h3>{t['name']}</h3>
+            <code class="path">{t['path']}</code>
+          </div>
+          <div class="big-score {('good' if (t['config_overall'] or 0)>=60 else 'mid' if (t['config_overall'] or 0)>=30 else 'low')}">
+            <span class="num">{(t['config_overall'] or 0):.0f}</span>
+            <span class="lvl-tag">{t.get('level','')}</span>
+          </div>
+        </div>
+        {gap_table_html(t, dim_labels)}
+        <div style="margin-top: 18px;">{merged_findings_html(t, dim_labels)}</div>
+        {"".join(f'<p class="blind"><span>盲區</span>{b}</p>' for b in t.get('blind_spots', []))}
+        {"".join(f'<p class="blind"><span>NOTE</span>{n}</p>' for n in t.get('notes', []))}
+      </section>""" for t in targets)
+
+    level_scale = "".join(
+        f'<div class="lv"><b>{lbl.split("·")[0].strip()}</b>'
+        f'<span>{lbl.split("·")[1].strip() if "·" in lbl else ""}</span>'
+        f'<i>{th}+</i></div>'
+        for th, lbl in merged.get("levels", []))
+
+    return f"""<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Agent 能力邊界診斷 · 配置 vs 運用</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  :root {{
+    --bg: #0b0f14; --panel: #121821; --panel-2: #0f141b; --line: #1f2a37;
+    --ink: #e4ecf4; --ink-dim: #8195a9; --good: #4ade80; --mid: #fbbf24;
+    --low: #f87171; --accent: #38bdf8;
+  }}
+  body {{
+    background:
+      radial-gradient(900px 600px at 80% -10%, rgba(56,189,248,.08), transparent),
+      radial-gradient(700px 500px at 0% 100%, rgba(74,222,128,.06), transparent),
+      var(--bg);
+    color: var(--ink); font-family: 'Noto Sans TC', system-ui, sans-serif;
+    line-height: 1.6; padding: 48px 20px 80px; min-height: 100vh;
+  }}
+  .wrap {{ max-width: 1080px; margin: 0 auto; }}
+  .masthead {{ margin-bottom: 36px; }}
+  .kicker {{ font-family: 'JetBrains Mono', monospace; font-size: 12px;
+             letter-spacing: .28em; color: var(--accent); text-transform: uppercase;
+             margin-bottom: 12px; }}
+  h1 {{ font-size: clamp(28px, 5vw, 46px); font-weight: 900; line-height: 1.1; letter-spacing: -.02em; }}
+  h1 .em {{ color: var(--accent); }}
+  .sub {{ color: var(--ink-dim); margin-top: 14px; max-width: 64ch; font-size: 15px; }}
+  .card {{ background: linear-gradient(180deg, var(--panel), var(--panel-2));
+           border: 1px solid var(--line); border-radius: 16px; padding: 28px;
+           margin-bottom: 22px; }}
+  h2 {{ font-size: 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }}
+  h2::before {{ content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }}
+  .card-sub {{ color: var(--ink-dim); font-size: 13.5px; max-width: 70ch; margin: -8px 0 18px; }}
+  .radar-wrap {{ display: grid; grid-template-columns: 1.1fr .9fr; gap: 24px; align-items: center; }}
+  @media (max-width: 760px) {{ .radar-wrap {{ grid-template-columns: 1fr; }} }}
+  .radar {{ width: 100%; height: auto; }}
+  .grid-ring {{ fill: none; stroke: var(--line); stroke-width: 1; }}
+  .axis {{ stroke: var(--line); stroke-width: 1; }}
+  .axis-label {{ fill: var(--ink-dim); font-size: 12.5px; font-family: 'Noto Sans TC'; font-weight: 500; }}
+  .series {{ filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 40%, transparent)); }}
+  .legend {{ display: flex; flex-direction: column; gap: 10px; }}
+  .leg {{ display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-dim); }}
+  .leg i {{ width: 14px; height: 14px; border-radius: 4px; display: inline-block; }}
+  .leg b {{ margin-left: auto; color: var(--ink); font-family: 'JetBrains Mono'; }}
+  .scale {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; }}
+  .lv {{ flex: 1; min-width: 110px; background: var(--panel-2); border: 1px solid var(--line);
+         border-radius: 10px; padding: 10px 12px; }}
+  .lv b {{ display: block; font-family: 'JetBrains Mono'; color: var(--accent); font-size: 13px; }}
+  .lv span {{ display: block; font-size: 12px; color: var(--ink-dim); }}
+  .lv i {{ font-style: normal; font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono'; }}
+  .pill {{ font-family: 'JetBrains Mono'; font-weight: 700; padding: 3px 10px;
+           border-radius: 999px; font-size: 13px; }}
+  .pill.good {{ background: rgba(74,222,128,.15); color: var(--good); }}
+  .pill.mid  {{ background: rgba(251,191,36,.15); color: var(--mid); }}
+  .pill.low  {{ background: rgba(248,113,113,.15); color: var(--low); }}
+  .target-head {{ display: flex; justify-content: space-between; align-items: flex-start;
+                  gap: 16px; margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
+  .target-head h3 {{ font-size: 20px; }}
+  .path {{ font-family: 'JetBrains Mono'; font-size: 11.5px; color: var(--ink-dim); word-break: break-all; }}
+  .big-score {{ text-align: right; min-width: 110px; }}
+  .big-score .num {{ font-family: 'JetBrains Mono'; font-weight: 800; font-size: 40px; line-height: 1; display: block; }}
+  .big-score.good .num {{ color: var(--good); }} .big-score.mid .num {{ color: var(--mid); }} .big-score.low .num {{ color: var(--low); }}
+  .lvl-tag {{ font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono'; }}
+  .dim-block {{ border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }}
+  .dim-block summary {{ list-style: none; cursor: pointer; display: flex; justify-content: space-between;
+                        align-items: center; padding: 14px 18px; background: var(--panel-2); }}
+  .dim-block summary::-webkit-details-marker {{ display: none; }}
+  .dim-block summary:hover {{ background: #141b25; }}
+  .d-name {{ font-weight: 700; font-size: 15px; }}
+  .d-score {{ font-family: 'JetBrains Mono'; font-weight: 800; font-size: 18px; }}
+  .d-score.good {{ color: var(--good); }} .d-score.mid {{ color: var(--mid); }} .d-score.low {{ color: var(--low); }}
+  .finding {{ padding: 12px 0; border-bottom: 1px dashed var(--line); }}
+  .finding:last-child {{ border-bottom: none; }}
+  .f-head {{ display: flex; justify-content: space-between; font-size: 14px; }}
+  .f-label {{ font-weight: 500; }}
+  .f-score {{ font-family: 'JetBrains Mono'; color: var(--ink-dim); font-size: 12px; }}
+  .f-bar {{ height: 5px; background: var(--line); border-radius: 3px; margin: 7px 0; overflow: hidden; }}
+  .f-bar i {{ display: block; height: 100%; border-radius: 3px; }}
+  .finding.good .f-bar i {{ background: var(--good); }}
+  .finding.mid  .f-bar i {{ background: var(--mid); }}
+  .finding.low  .f-bar i {{ background: var(--low); }}
+  .f-detail {{ font-size: 12.5px; color: var(--ink-dim); }}
+  .blind {{ margin-top: 16px; font-size: 13px; color: var(--ink-dim); background: rgba(56,189,248,.06);
+            border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 0 8px 8px 0; }}
+  .blind span {{ font-family: 'JetBrains Mono'; color: var(--accent); font-weight: 700;
+                 margin-right: 8px; text-transform: uppercase; font-size: 11px; letter-spacing: .1em; }}
+  footer {{ text-align: center; color: var(--ink-dim); font-size: 12px; margin-top: 40px;
+            font-family: 'JetBrains Mono'; }}
+  {_MERGED_EXTRA_CSS}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="masthead">
+      <div class="kicker">agent-radar · config vs usage</div>
+      <h1>能力<span class="em">配置 vs 運用</span>落差診斷</h1>
+      <p class="sub">把 scanner 的「靜態配置」與 OTel events 的「實際運用」疊在同一組軸上。
+      實線與虛線之間的面積就是能力浪費區 — 你配了但沒在用的部分。</p>
+    </header>
+
+    <section class="card">
+      <h2>雙軌雷達 · Config × Usage</h2>
+      <div class="radar-wrap">
+        {radar}
+        <div class="legend">{legend}</div>
+      </div>
+      {dual_legend}
+      <div class="scale">{level_scale}</div>
+    </section>
+
+    {top_gaps_html(targets)}
+
+    {target_sections}
+
+    <footer>agent-radar · static fingerprint + OTel telemetry · 配置 ≠ 運用</footer>
+  </div>
+</body>
+</html>"""
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("input", help="scanner.py 產出的 JSON")
+    ap.add_argument("input", nargs="?", default=None,
+                    help="scanner.py 產出的 JSON (scan-only 模式)")
     ap.add_argument("--session", default=None,
                     help="session_scanner.py 產出的 JSON (可選,加上後報告會多一張運用度雷達)")
+    ap.add_argument("--merged", default=None,
+                    help="usage.merge 產出的 JSON (雙軌雷達模式 — SPEC §8)")
     ap.add_argument("-o", "--output", default="report.html")
     args = ap.parse_args()
 
-    data = json.loads(Path(args.input).read_text(encoding="utf-8"))
-    session_data = None
-    if args.session:
-        session_data = json.loads(Path(args.session).read_text(encoding="utf-8"))
-    html = build_html(data, session_data=session_data)
+    if args.merged:
+        merged = json.loads(Path(args.merged).read_text(encoding="utf-8"))
+        html = build_merged_html(merged)
+    else:
+        if not args.input:
+            ap.error("input 為必要參數 (或改用 --merged)")
+        data = json.loads(Path(args.input).read_text(encoding="utf-8"))
+        session_data = None
+        if args.session:
+            session_data = json.loads(Path(args.session).read_text(encoding="utf-8"))
+        html = build_html(data, session_data=session_data)
     Path(args.output).write_text(html, encoding="utf-8")
     print(f"[ok] 報告已生成: {args.output}")
 

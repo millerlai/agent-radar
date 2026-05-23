@@ -1,0 +1,63 @@
+{
+  "dimensions": {
+    "claude_md": "CLAUDE.md 成熟度",
+    "skills": "Skills 運用",
+    "mcp": "MCP 整合",
+    "automation": "自動化",
+    "context_hygiene": "情境衛生",
+    "iteration": "迭代與維護"
+  },
+  "levels": [
+    [0, "L0 · 未使用 (Unaware)"],
+    [20, "L1 · 萌芽 (Reactive)"],
+    [40, "L2 · 結構化 (Structured)"],
+    [60, "L3 · 進階 (Advanced)"],
+    [80, "L4 · 精煉 (Mastery)"]
+  ],
+  "targets": [
+    {
+      "name": "agent-radar",
+      "path": "D:\\project\\agent-radar",
+      "is_home": false,
+      "findings": [
+        {"dimension": "claude_md", "label": "CLAUDE.md 存在", "weight": 25, "score": 25, "detail": "找到 CLAUDE.md"},
+        {"dimension": "claude_md", "label": "結構化分區", "weight": 20, "score": 18, "detail": "5 個標題, 命中 4 個分區關鍵字"},
+        {"dimension": "claude_md", "label": "指令式語氣", "weight": 15, "score": 12, "detail": "8 處規範語句"},
+        {"dimension": "claude_md", "label": "精簡度", "weight": 15, "score": 15, "detail": "黃金區間"},
+        {"dimension": "claude_md", "label": "@import 引用", "weight": 10, "score": 10, "detail": "2 處 @ 引用"},
+        {"dimension": "claude_md", "label": "Lint: 大小合理", "weight": 15, "score": 15, "detail": "2345 chars (合規)"},
+
+        {"dimension": "skills", "label": "Skills 存在", "weight": 35, "score": 35, "detail": "找到 6 個 SKILL.md"},
+        {"dimension": "skills", "label": "description 品質", "weight": 35, "score": 28, "detail": "description 平均品質佳"},
+        {"dimension": "skills", "label": "Progressive disclosure", "weight": 30, "score": 24, "detail": "主檔精簡 + 附屬檔拆分"},
+        {"dimension": "skills", "label": "Lint: frontmatter & token 衛生", "weight": 20, "score": 18, "detail": "frontmatter 合規 6/6"},
+
+        {"dimension": "mcp", "label": "MCP server 數量", "weight": 50, "score": 50, "detail": "4 個 MCP server"},
+        {"dimension": "mcp", "label": "MCP 類型廣度", "weight": 50, "score": 51, "detail": "涵蓋類別: data, saas, search"},
+
+        {"dimension": "automation", "label": "Hooks", "weight": 30, "score": 30, "detail": "偵測到 hooks 設定"},
+        {"dimension": "automation", "label": "Subagents", "weight": 30, "score": 30, "detail": "3 個 subagent"},
+        {"dimension": "automation", "label": "自訂 slash commands", "weight": 25, "score": 25, "detail": "5 個自訂命令"},
+        {"dimension": "automation", "label": "Plugins", "weight": 15, "score": 15, "detail": "偵測到 plugin 使用"},
+
+        {"dimension": "context_hygiene", "label": "User/Project 分工", "weight": 40, "score": 40, "detail": "同時具備 project 與 user-space 設定"},
+        {"dimension": "context_hygiene", "label": "共享/個人設定區分", "weight": 30, "score": 30, "detail": "settings.local.json 已 gitignore"},
+        {"dimension": "context_hygiene", "label": "模組化引用", "weight": 30, "score": 30, "detail": "2 處模組化引用"},
+
+        {"dimension": "iteration", "label": "設定檔 git 迭代", "weight": 60, "score": 48, "detail": "設定相關 commit 6 次"},
+        {"dimension": "iteration", "label": "設定檔多樣性", "weight": 40, "score": 28, "detail": "曾迭代 2 類設定檔"}
+      ],
+      "scores": {
+        "claude_md": 91.4,
+        "skills": 86.4,
+        "mcp": 100.0,
+        "automation": 100.0,
+        "context_hygiene": 100.0,
+        "iteration": 76.0
+      },
+      "overall": 92.5,
+      "level": "L4 · 精煉 (Mastery)",
+      "blind_spots": []
+    }
+  ]
+}

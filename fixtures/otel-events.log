@@ -1,0 +1,42 @@
+{"metric": "claude_code.session.count", "value": 2, "attributes": {"session.id": "sess-001"}}
+{"metric": "claude_code.active_time.total", "value": 5400, "attributes": {"type": "user"}}
+{"event_name": "claude_code.plugin_loaded", "attributes": {"plugin.name": "academic-research-skills", "plugin.scope": "user-local", "has_hooks": true, "has_mcp": false, "skill_path_count": 14}}
+{"event_name": "claude_code.plugin_loaded", "attributes": {"plugin.name": "financial-analysis", "plugin.scope": "user-local", "has_hooks": false, "has_mcp": true, "skill_path_count": 9}}
+{"event_name": "claude_code.skill_activated", "attributes": {"skill.name": "ars-plan", "invocation_trigger": "user-slash", "skill.source": "plugin", "plugin.name": "academic-research-skills", "session.id": "sess-001"}}
+{"event_name": "claude_code.skill_activated", "attributes": {"skill.name": "ars-plan", "invocation_trigger": "user-slash", "skill.source": "plugin", "plugin.name": "academic-research-skills", "session.id": "sess-001"}}
+{"event_name": "claude_code.skill_activated", "attributes": {"skill.name": "ars-plan", "invocation_trigger": "claude-proactive", "skill.source": "plugin", "plugin.name": "academic-research-skills", "session.id": "sess-002"}}
+{"event_name": "claude_code.skill_activated", "attributes": {"skill.name": "browse", "invocation_trigger": "claude-proactive", "skill.source": "userSettings", "session.id": "sess-002"}}
+{"event_name": "claude_code.mcp_server_connection", "attributes": {"server_name": "github", "status": "connected", "transport_type": "stdio", "server_scope": "user", "session.id": "sess-001"}}
+{"event_name": "claude_code.mcp_server_connection", "attributes": {"server_name": "github", "status": "connected", "transport_type": "stdio", "server_scope": "user", "session.id": "sess-002"}}
+{"event_name": "claude_code.mcp_server_connection", "attributes": {"server_name": "sentry", "status": "failed", "transport_type": "http", "server_scope": "user", "error_code": "ETIMEDOUT", "session.id": "sess-001"}}
+{"event_name": "claude_code.mcp_server_connection", "attributes": {"server_name": "playwright", "status": "connected", "transport_type": "stdio", "server_scope": "project", "session.id": "sess-001"}}
+{"event_name": "claude_code.tool_result", "attributes": {"tool_name": "mcp__github__create_pull_request", "success": true, "duration_ms": 1822, "mcp_server_scope": "user", "session.id": "sess-001"}}
+{"event_name": "claude_code.tool_result", "attributes": {"tool_name": "mcp__github__list_issues", "success": true, "duration_ms": 540, "session.id": "sess-002"}}
+{"event_name": "claude_code.tool_result", "attributes": {"tool_name": "Task", "success": true, "duration_ms": 33000, "tool_parameters": {"subagent_type": "Explore"}, "session.id": "sess-001"}}
+{"event_name": "claude_code.tool_result", "attributes": {"tool_name": "Task", "success": true, "duration_ms": 41200, "tool_parameters": {"subagent_type": "claude-code-guide"}, "session.id": "sess-002"}}
+{"event_name": "claude_code.hook_registered", "attributes": {"hook_event": "PreToolUse", "hook_type": "command", "hook_source": "projectSettings"}}
+{"event_name": "claude_code.hook_registered", "attributes": {"hook_event": "PostToolUse", "hook_type": "command", "hook_source": "projectSettings"}}
+{"event_name": "claude_code.hook_registered", "attributes": {"hook_event": "Stop", "hook_type": "command", "hook_source": "projectSettings"}}
+{"event_name": "claude_code.hook_execution_complete", "attributes": {"hook_event": "PreToolUse", "num_hooks": 1, "num_success": 1, "num_blocking": 0, "num_non_blocking_error": 0, "total_duration_ms": 42}}
+{"event_name": "claude_code.hook_execution_complete", "attributes": {"hook_event": "PreToolUse", "num_hooks": 1, "num_success": 1, "num_blocking": 0, "num_non_blocking_error": 0, "total_duration_ms": 38}}
+{"event_name": "claude_code.hook_execution_complete", "attributes": {"hook_event": "PreToolUse", "num_hooks": 1, "num_success": 1, "num_blocking": 0, "num_non_blocking_error": 0, "total_duration_ms": 51}}
+{"event_name": "claude_code.at_mention", "attributes": {"mention_type": "file", "success": true, "session.id": "sess-001"}}
+{"event_name": "claude_code.at_mention", "attributes": {"mention_type": "file", "success": true, "session.id": "sess-001"}}
+{"event_name": "claude_code.at_mention", "attributes": {"mention_type": "file", "success": true, "session.id": "sess-002"}}
+{"event_name": "claude_code.at_mention", "attributes": {"mention_type": "file", "success": false, "session.id": "sess-002"}}
+{"event_name": "claude_code.at_mention", "attributes": {"mention_type": "agent", "success": true, "session.id": "sess-002"}}
+{"event_name": "claude_code.tool_decision", "attributes": {"decision": "accept", "source": "config", "tool_name": "Edit"}}
+{"event_name": "claude_code.tool_decision", "attributes": {"decision": "accept", "source": "config", "tool_name": "Bash"}}
+{"event_name": "claude_code.tool_decision", "attributes": {"decision": "accept", "source": "config", "tool_name": "Read"}}
+{"event_name": "claude_code.tool_decision", "attributes": {"decision": "accept", "source": "user_permanent", "tool_name": "Write"}}
+{"event_name": "claude_code.tool_decision", "attributes": {"decision": "accept", "source": "config", "tool_name": "Grep"}}
+{"event_name": "claude_code.tool_decision", "attributes": {"decision": "accept", "source": "config", "tool_name": "Edit"}}
+{"event_name": "claude_code.tool_decision", "attributes": {"decision": "accept", "source": "config", "tool_name": "Bash"}}
+{"event_name": "claude_code.tool_decision", "attributes": {"decision": "accept", "source": "config", "tool_name": "Read"}}
+{"event_name": "claude_code.tool_decision", "attributes": {"decision": "reject", "source": "user_reject", "tool_name": "Bash"}}
+{"event_name": "claude_code.tool_decision", "attributes": {"decision": "reject", "source": "user_reject", "tool_name": "Bash"}}
+{"metric": "claude_code.token.usage", "value": 12480, "attributes": {"skill.name": "ars-plan", "plugin.name": "academic-research-skills"}}
+{"metric": "claude_code.token.usage", "value": 3120, "attributes": {"skill.name": "browse"}}
+{"metric": "claude_code.token.usage", "value": 88500, "attributes": {"agent.name": "Explore"}}
+{"metric": "claude_code.cost.usage", "value": 0.063, "attributes": {"skill.name": "ars-plan", "plugin.name": "academic-research-skills"}}
+{"metric": "claude_code.cost.usage", "value": 0.42, "attributes": {"agent.name": "Explore"}}

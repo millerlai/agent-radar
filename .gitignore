@@ -11,5 +11,9 @@ venv/
 # 掃描輸出 (本機產物,保留 sample-scan.json + report.html 作示範)
 scan.json
 session.json
+usage.json
+merged.json
+report-merged.html
+report-session.html
 test-*.json
 test-*.html
