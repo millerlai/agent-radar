@@ -1,0 +1,15 @@
+# Claude Code 個人/本機設定 (不應共享)
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# 掃描輸出 (本機產物,保留 sample-scan.json + report.html 作示範)
+scan.json
+session.json
+test-*.json
+test-*.html
