@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 from agent_radar import __version__, cli
 

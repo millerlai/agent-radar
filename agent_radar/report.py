@@ -849,14 +849,18 @@ def build_merged_html(merged, lang="en"):
 
     radar = dual_radar_svg(targets, dim_keys, dim_labels)
 
-    legend = "".join(
-        f'<span class="leg"><i style="background:{PALETTE[i%len(PALETTE)]}"></i>'
-        f'{t["name"]} '
-        f'<b>{(t["config_overall"] or 0):.0f}</b>'
-        f'<span class="sub">→ '
-        f'{(f"{t['usage_overall']:.0f}" if t.get("usage_overall") is not None else "N/A")}</span>'
-        f'</span>'
-        for i, t in enumerate(targets))
+    def _legend_item(i: int, t: dict) -> str:
+        usage_overall = t.get("usage_overall")
+        usage_str = f"{usage_overall:.0f}" if usage_overall is not None else "N/A"
+        return (
+            f'<span class="leg"><i style="background:{PALETTE[i%len(PALETTE)]}"></i>'
+            f'{t["name"]} '
+            f'<b>{(t["config_overall"] or 0):.0f}</b>'
+            f'<span class="sub">→ {usage_str}</span>'
+            f'</span>'
+        )
+
+    legend = "".join(_legend_item(i, t) for i, t in enumerate(targets))
 
     dual_legend = (
         '<div class="dual-legend">'

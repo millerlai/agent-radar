@@ -9,8 +9,6 @@ report renders it as N/A with a dashed line.
 
 from __future__ import annotations
 
-from dataclasses import asdict
-from typing import Any
 
 from .collectors.base import UsageWindow
 

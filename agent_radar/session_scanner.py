@@ -286,7 +286,7 @@ def main():
 
     if not projects_root.exists():
         print(f"[err] projects 目錄不存在: {projects_root}", file=sys.stderr)
-        print(f"      (Cygwin 環境提示: 試 --projects-dir /c/Users/<you>/.claude/projects)",
+        print("      (Cygwin 環境提示: 試 --projects-dir /c/Users/<you>/.claude/projects)",
               file=sys.stderr)
         sys.exit(1)
 

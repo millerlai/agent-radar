@@ -37,13 +37,11 @@ agent-radar :: agent_radar.scanner
 
 import argparse
 import json
-import os
 import re
 import subprocess
 import sys
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Optional
 
 
 # ----------------------------------------------------------------------------
@@ -127,7 +125,7 @@ def _git_log_count(repo: Path, pathspec: str) -> int:
         )
         if out.returncode != 0:
             return 0
-        return len([l for l in out.stdout.splitlines() if l.strip()])
+        return len([line for line in out.stdout.splitlines() if line.strip()])
     except Exception:
         return 0
 
