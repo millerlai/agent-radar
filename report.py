@@ -184,8 +184,14 @@ def _polar_point(cx, cy, radius, value, i, n):
 
 
 def radar_svg(targets, dim_keys, dim_labels, size=460, idx_offset=0):
-    """產生多目標疊圖的雷達圖 SVG。"""
-    cx = cy = size / 2
+    """產生多目標疊圖的雷達圖 SVG。
+
+    viewBox 在 size 之外左右各加 pad 像素,給軸標籤水平延伸空間,
+    避免中文標籤被截掉。雷達主體位置由 cx/cy 平移補償。
+    """
+    pad = 70
+    vb = size + pad * 2
+    cx = cy = size / 2 + pad
     radius = size * 0.34
     n = len(dim_keys)
     rings = 4
@@ -196,7 +202,7 @@ def radar_svg(targets, dim_keys, dim_labels, size=460, idx_offset=0):
         r = radius * (value / 100)
         return cx + r * math.cos(ang), cy + r * math.sin(ang)
 
-    parts = [f'<svg viewBox="0 0 {size} {size}" xmlns="http://www.w3.org/2000/svg" '
+    parts = [f'<svg viewBox="0 0 {vb} {vb}" xmlns="http://www.w3.org/2000/svg" '
              f'role="img" class="radar">']
 
     # 同心格線
@@ -572,13 +578,17 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
 
     iteration 維度的 usage 為 None (SPEC §6.6),usage polygon 以開口形式
     繞過 iteration 軸,避免假裝 0 分。
+
+    viewBox 預留 pad 給軸標籤,避免中文標籤被截掉 (與 radar_svg 同策略)。
     """
-    cx = cy = size / 2
+    pad = 70
+    vb = size + pad * 2
+    cx = cy = size / 2 + pad
     radius = size * 0.34
     n = len(dim_keys)
     rings = 4
 
-    parts = [f'<svg viewBox="0 0 {size} {size}" xmlns="http://www.w3.org/2000/svg" '
+    parts = [f'<svg viewBox="0 0 {vb} {vb}" xmlns="http://www.w3.org/2000/svg" '
              f'role="img" class="radar">']
 
     # 同心格線
