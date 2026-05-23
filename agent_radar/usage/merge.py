@@ -83,7 +83,6 @@ def scan_context_for(scan_target: dict) -> dict:
 def _gap_hint(dim: str, target_name: str, scan_target: dict,
               usage_target: dict | None) -> str:
     """One-line, actionable suggestion based on the dimension and any context."""
-    config_findings = {f["dimension"]: f for f in scan_target.get("findings", [])}
     usage_findings = (usage_target or {}).get("findings_by_dim", {}).get(dim, [])
 
     if dim == "skills":

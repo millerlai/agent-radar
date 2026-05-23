@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
-import pytest
 
 from agent_radar.usage import merge as merge_mod
 from agent_radar.usage.merge import (

@@ -41,6 +41,17 @@ agent-radar = "agent_radar.cli:main"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 
+[tool.ruff]
+target-version = "py38"
+line-length = 120
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+# Start with ruff defaults (E, F) — keeps scope tight; extend later if needed.
+ignore = [
+    "E501",  # long HTML/SVG string literals in report.py are intentional
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["agent_radar"]
 
