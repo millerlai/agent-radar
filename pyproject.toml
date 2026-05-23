@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-radar"
+version = "0.1.0"
+description = "AI Agent capability boundary diagnostic — scan Claude Code filesystem fingerprints into six-dimension maturity scores."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Miller Lai", email = "miller.lai@gmail.com" }]
+keywords = ["claude-code", "agent", "diagnostic", "maturity", "radar", "skill"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/millerlai/agent-radar"
+Repository = "https://github.com/millerlai/agent-radar"
+Issues = "https://github.com/millerlai/agent-radar/issues"
+
+[project.scripts]
+agent-radar = "agent_radar.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agent_radar"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/agent_radar",
+    "/README.md",
+    "/README-ZH-TW.md",
+    "/LICENSE",
+    "/SKILL.md",
+    "/CLAUDE.md",
+]

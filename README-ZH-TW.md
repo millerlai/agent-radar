@@ -6,8 +6,8 @@
 
 **雙層量測**:
 
-- `scanner.py` 量「配置完整度」(靜態指紋,六大配置維度)
-- `session_scanner.py` 讀本機 `~/.claude/projects/*.jsonl`,量「實際運用度」
+- `agent-radar scan` 量「配置完整度」(靜態指紋,六大配置維度)
+- `agent-radar session` 讀本機 `~/.claude/projects/*.jsonl`,量「實際運用度」
   (session 內真正觸發的工具 / Skill / MCP / 使用者糾正率)
 
 兩者落差即是最具體的改善清單。本專案本身也是一個可安裝的 Claude Code skill
@@ -24,7 +24,7 @@
 很多人寫了完整 CLAUDE.md、裝了 5 個 MCP,但實際 session 中根本沒被用到——
 這個落差,本工具會用兩條雷達線疊起來直接視覺化。
 
-## 六大配置維度 (scanner.py)
+## 六大配置維度 (agent-radar scan)
 
 | 維度 | 偵測什麼 |
 |---|---|
@@ -42,7 +42,7 @@ ASCII art / 裝飾性內容偵測、CLAUDE.md 過大警告等),用純 Python 重
 
 總分對應 L0(未使用) → L4(精煉) 五個層級。
 
-## 六大運用維度 (session_scanner.py)
+## 六大運用維度 (agent-radar session)
 
 | 維度 | 量測什麼 |
 |---|---|
@@ -57,15 +57,33 @@ ASCII art / 裝飾性內容偵測、CLAUDE.md 過大警告等),用純 Python 重
 
 **前置需求**:Python 3.8+ (僅用標準庫,零外部相依)。
 
-### 方式 A · 直接 clone 使用
+### 方式 A · 從 PyPI / 原始碼安裝 (推薦)
 
-適合想自己跑掃描、看原始程式碼或修改評分權重的人。
+支援 `pip` / `uv` / `poetry` 三種工具,安裝完 `agent-radar` 會在 PATH 上。
 
 ```bash
+# pip
+pip install agent-radar
+
+# uv
+uv pip install agent-radar
+# 或裝成 uv tool
+uv tool install agent-radar
+
+# poetry
+poetry add agent-radar
+
+# 在原始碼上開發 (editable install)
 git clone <repo-url> agent-radar
 cd agent-radar
-# 跑一次確認 Python 可用
-python3 scanner.py --help
+pip install -e .
+agent-radar --help
+```
+
+不想裝套件時,也可以直接從 repo 跑:
+
+```bash
+python -m agent_radar --help        # 在 clone 出來的目錄裡執行
 ```
 
 ### 方式 B · 安裝為 Claude Code skill (推薦給日常使用)
@@ -89,15 +107,8 @@ Copy-Item -Recurse C:\path\to\agent-radar $env:USERPROFILE\.claude\skills\agent-
 - 「找出我設定的盲區」
 - 「benchmark our team's Claude Code adoption」
 
-### Python 命令差異 (跨 OS 速查)
-
-| 環境 | Python 命令 |
-|---|---|
-| macOS / Linux | `python3 scanner.py ...` |
-| Windows (PowerShell / cmd) | `python scanner.py ...` |
-| Cygwin (本機無 cygwin python) | `/c/Python313/python.exe scanner.py ...` 或切到 PowerShell |
-
-下方範例統一寫 `python3`,Windows 使用者請替換為 `python`。
+skill 會呼叫 `agent-radar` CLI,所以請先 `pip install agent-radar`,或在
+skill 目錄裡改用 `python -m agent_radar ...`。
 
 ## 執行
 
@@ -106,21 +117,33 @@ Copy-Item -Recurse C:\path\to\agent-radar $env:USERPROFILE\.claude\skills\agent-
 掃當前 repo + 你的 user-space,生成完整含實際運用度的 HTML 報告:
 
 ```bash
-python3 scanner.py --include-home . -o scan.json
-python3 session_scanner.py -o session.json
-python3 report.py scan.json --session session.json -o report.html
+agent-radar scan --include-home . -o scan.json
+agent-radar session -o session.json
+agent-radar report scan.json --session session.json -o report.html
 open report.html        # macOS
 xdg-open report.html    # Linux
 start report.html       # Windows (PowerShell / cmd)
 ```
+
+### 子指令一覽
+
+| 子指令 | 用途 |
+|---|---|
+| `agent-radar scan` | 掃檔案系統指紋 (六大配置維度) |
+| `agent-radar session` | 掃本機 `~/.claude/projects/*.jsonl` 量實際運用 |
+| `agent-radar report` | 產 HTML 雷達報告 |
+| `agent-radar usage` | 把 OTel 事件轉成 `usage.json` |
+| `agent-radar merge` | 把 `scan.json` + `usage.json` 合成 `merged.json` |
+
+每個子指令都有自己的 `--help`;另一種等價寫法是 `python -m agent_radar <sub> ...`。
 
 ### 三種掃描情境
 
 **情境 1 · 個人單一 repo (最簡)**
 
 ```bash
-python3 scanner.py /path/to/repo -o scan.json
-python3 report.py scan.json -o report.html
+agent-radar scan /path/to/repo -o scan.json
+agent-radar report scan.json -o report.html
 ```
 
 **情境 2 · 個人完整體檢 (含 user-space)**
@@ -128,8 +151,8 @@ python3 report.py scan.json -o report.html
 把 `~/.claude/` 一併納入,看 user-level 與 project-level 設定的分工:
 
 ```bash
-python3 scanner.py --include-home /path/to/repo -o scan.json
-python3 report.py scan.json -o report.html
+agent-radar scan --include-home /path/to/repo -o scan.json
+agent-radar report scan.json -o report.html
 ```
 
 **情境 3 · 團隊 benchmark (多 repo)**
@@ -137,44 +160,47 @@ python3 report.py scan.json -o report.html
 掃多個 repo,報告會自動加排行榜:
 
 ```bash
-python3 scanner.py /repos/a /repos/b /repos/c -o scan.json
-python3 report.py scan.json -o report.html
+agent-radar scan /repos/a /repos/b /repos/c -o scan.json
+agent-radar report scan.json -o report.html
 ```
 
 ### 加上實際運用度量測 (完整雙層分析)
 
-`session_scanner.py` 讀本機 `~/.claude/projects/*.jsonl`,輸出 session 中
-真正觸發的工具 / Skill / MCP / 使用者糾正率。配 `report.py --session`
+`agent-radar session` 讀本機 `~/.claude/projects/*.jsonl`,輸出 session 中
+真正觸發的工具 / Skill / MCP / 使用者糾正率。配 `agent-radar report --session`
 會在 HTML 多一張運用度雷達:
 
 ```bash
 # 1. 掃所有 project (預設讀 ~/.claude/projects/)
-python3 session_scanner.py -o session.json
+agent-radar session -o session.json
 
 # 或:只統計某幾個 repo
-python3 session_scanner.py /path/to/repo -o session.json
+agent-radar session /path/to/repo -o session.json
 
 # 2. Cygwin / 跨 OS 環境,手動指定 projects 目錄
-python3 session_scanner.py --projects-dir /c/Users/<you>/.claude/projects -o session.json
+agent-radar session --projects-dir /c/Users/<you>/.claude/projects -o session.json
 
 # 3. 生成雙層雷達報告
-python3 report.py scan.json --session session.json -o report.html
+agent-radar report scan.json --session session.json -o report.html
 ```
 
 ### 輸出檔案說明
 
 | 檔案 | 來源 | 內容 |
 |---|---|---|
-| `scan.json` | `scanner.py` | 配置完整度:六大配置維度分數 + 每個訊號的明細 |
-| `session.json` | `session_scanner.py` | 實際運用度:每個 project 的 tool 呼叫、Skill / MCP 觸發、糾正率 |
-| `report.html` | `report.py` | 單檔可離線開啟的 HTML 報告,含雷達圖 + 排行 + 明細手風琴 |
+| `scan.json` | `agent-radar scan` | 配置完整度:六大配置維度分數 + 每個訊號的明細 |
+| `session.json` | `agent-radar session` | 實際運用度:每個 project 的 tool 呼叫、Skill / MCP 觸發、糾正率 |
+| `report.html` | `agent-radar report` | 單檔可離線開啟的 HTML 報告,含雷達圖 + 排行 + 明細手風琴 |
 
 ### 完整 CLI 旗標
 
 ```bash
-python3 scanner.py --help          # paths, --include-home, -o
-python3 session_scanner.py --help  # paths, --projects-dir, -o
-python3 report.py --help           # input, --session, -o
+agent-radar --help                  # 列出所有子指令 + 版本
+agent-radar scan --help             # paths, --include-home, -o
+agent-radar session --help          # paths, --projects-dir, -o
+agent-radar report --help           # input, --session, --merged, --lang, -o
+agent-radar usage --help            # --otel-log, --scan, --target, --account, ...
+agent-radar merge --help            # scan.json, usage.json, -o
 ```
 
 ## 限制

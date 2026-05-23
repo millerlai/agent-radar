@@ -9,7 +9,7 @@ Example
   export OTEL_LOG_TOOL_DETAILS=1
   claude 2>> ~/.agent-radar/otel-events.log
 
-  python -m usage \\
+  agent-radar usage \\
       --otel-log ~/.agent-radar/otel-events.log \\
       --scan scan.json \\
       --target my-repo \\
@@ -40,12 +40,12 @@ def _parse_iso(value: str | None) -> datetime | None:
 
 
 def main():
-    ap = argparse.ArgumentParser(prog="python -m usage",
-                                 description="Score OTel events → usage.json (SPEC §6)")
+    ap = argparse.ArgumentParser(prog="agent-radar usage",
+                                 description="Score OTel events → usage.json")
     ap.add_argument("--otel-log", required=True,
                     help="Console exporter 落檔 (一行一筆 JSON)")
     ap.add_argument("--scan", default=None,
-                    help="scanner.py 產出的 JSON,提供配置側分母")
+                    help="agent-radar scan 產出的 JSON,提供配置側分母")
     ap.add_argument("--target", default=None,
                     help="當 --scan 提供時,指定要對齊的 target 名稱 "
                          "(若 scan.json 只有 1 個 target 可省略)")

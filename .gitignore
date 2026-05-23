@@ -8,6 +8,11 @@ __pycache__/
 .venv/
 venv/
 
+# Build artifacts (hatchling / pip / uv)
+build/
+dist/
+*.egg-info/
+
 # 掃描輸出 (本機產物,保留 sample-scan.json + report.html 作示範)
 scan.json
 session.json

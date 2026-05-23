@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-agent-radar :: report.py
-========================
-讀取 scanner.py 產出的 JSON，生成單檔 HTML 雷達圖診斷報告。
+agent-radar :: agent_radar.report
+=================================
+讀取 ``agent-radar scan`` 產出的 JSON，生成單檔 HTML 雷達圖診斷報告。
 
 用法:
-  python scanner.py <paths...> -o scan.json
-  python report.py scan.json -o report.html
+  agent-radar scan <paths...> -o scan.json
+  agent-radar report scan.json -o report.html
 """
 
 import argparse
@@ -134,7 +134,7 @@ STRINGS = {
     },
 }
 
-# 維度 key 的英文標籤 (scanner.py 預設輸出繁中)
+# 維度 key 的英文標籤 (agent-radar scan 預設輸出繁中)
 DIMENSIONS_I18N = {
     "en": {
         "claude_md": "CLAUDE.md Maturity",
@@ -287,7 +287,7 @@ DIM_LABELS = {}  # 由 main 注入
 
 
 def build_usage_section(session_data, lang="en"):
-    """生成「實際運用度」雷達卡 (來自 session_scanner.py 輸出)。"""
+    """生成「實際運用度」雷達卡 (來自 agent-radar session 輸出)。"""
     if not session_data:
         return ""
     dims = session_data.get("usage_dimensions", {})
@@ -576,8 +576,8 @@ def build_html(data, session_data=None, lang="en"):
 def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0):
     """雙軌雷達:每個 target 同時畫實線 (config) + 虛線 (usage)。
 
-    iteration 維度的 usage 為 None (SPEC §6.6),usage polygon 以開口形式
-    繞過 iteration 軸,避免假裝 0 分。
+    iteration 維度的 usage 為 None,usage polygon 以開口形式繞過 iteration
+    軸,避免假裝 0 分。
 
     viewBox 預留 pad 給軸標籤,避免中文標籤被截掉 (與 radar_svg 同策略)。
     """
@@ -1030,11 +1030,11 @@ def _prompt_lang():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("input", nargs="?", default=None,
-                    help="scanner.py 產出的 JSON (scan-only 模式)")
+                    help="agent-radar scan 產出的 JSON (scan-only 模式)")
     ap.add_argument("--session", default=None,
-                    help="session_scanner.py 產出的 JSON (可選,加上後報告會多一張運用度雷達)")
+                    help="agent-radar session 產出的 JSON (可選,加上後報告會多一張運用度雷達)")
     ap.add_argument("--merged", default=None,
-                    help="usage.merge 產出的 JSON (雙軌雷達模式 — SPEC §8)")
+                    help="agent-radar merge 產出的 JSON (雙軌雷達模式)")
     ap.add_argument("--lang", choices=["en", "zh"], default=None,
                     help="報告語言 (en|zh)。未指定時若為 TTY 會彈出選單,否則預設 en")
     ap.add_argument("-o", "--output", default="report.html")

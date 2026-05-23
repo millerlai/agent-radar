@@ -1,10 +1,10 @@
 """Convert a UsageWindow into per-dimension 0–100 scores.
 
-The dimension keys MUST mirror scanner.py's DIMENSIONS exactly so the merge
-step can stack config vs usage on the same radar axes (SPEC §6).
+The dimension keys MUST mirror ``agent_radar.scanner``'s DIMENSIONS exactly so
+the merge step can stack config vs usage on the same radar axes.
 
-`iteration` has no usage signal (SPEC §6.6) — it is intentionally returned as
-None, and the report renders it as N/A with a dashed line.
+`iteration` has no usage signal — it is intentionally returned as None, and the
+report renders it as N/A with a dashed line.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def _safe_div(num: float, den: float) -> float:
 
 
 # ---------------------------------------------------------------------------
-# per-dimension scoring (SPEC §6)
+# per-dimension scoring
 # ---------------------------------------------------------------------------
 
 def _score_skills(w: UsageWindow) -> tuple[float, list[dict]]:
@@ -240,7 +240,7 @@ def score_window(window: UsageWindow, scan_context: dict | None = None) -> dict:
         "mcp": mcp_score,
         "automation": auto_score,
         "context_hygiene": ctx_score,
-        "iteration": None,  # SPEC §6.6 — N/A
+        "iteration": None,  # N/A — no usage-side signal for iteration
     }
     findings_by_dim = {
         "claude_md": md_f,

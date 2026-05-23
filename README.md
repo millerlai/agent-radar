@@ -7,8 +7,8 @@ score (0–100), then outputs an HTML radar-chart report.
 
 **Two-layer measurement:**
 
-- `scanner.py` measures *configuration completeness* (static fingerprints, six config dimensions)
-- `session_scanner.py` reads local `~/.claude/projects/*.jsonl` to measure *actual usage*
+- `agent-radar scan` measures *configuration completeness* (static fingerprints, six config dimensions)
+- `agent-radar session` reads local `~/.claude/projects/*.jsonl` to measure *actual usage*
   (which tools, Skills, MCP servers actually fire, plus user correction rate)
 
 The gap between the two is the most concrete improvement checklist. The repo itself
@@ -27,7 +27,7 @@ Plenty of people write a thorough CLAUDE.md and install five MCP servers, but no
 in those configs gets exercised during real sessions. That gap is exactly what
 agent-radar visualizes — two overlaid radar polygons make it obvious.
 
-## Six Config Dimensions (scanner.py)
+## Six Config Dimensions (agent-radar scan)
 
 | Dimension | What it detects |
 |---|---|
@@ -45,7 +45,7 @@ reimplemented in pure Python — no external dependencies.
 
 The total score maps onto five levels: L0 (unaware) → L4 (mastery).
 
-## Six Usage Dimensions (session_scanner.py)
+## Six Usage Dimensions (agent-radar session)
 
 | Dimension | What it measures |
 |---|---|
@@ -60,15 +60,34 @@ The total score maps onto five levels: L0 (unaware) → L4 (mastery).
 
 **Prerequisites**: Python 3.8+ (standard library only — zero external deps).
 
-### Option A · Clone and run directly
+### Option A · Install from PyPI / source (recommended)
 
-For people who want to run scans themselves, read the source, or tune the
-scoring weights.
+Works with `pip`, `uv`, and `poetry`. Once installed, the `agent-radar`
+console command is on your `PATH`.
 
 ```bash
+# pip
+pip install agent-radar
+
+# uv
+uv pip install agent-radar
+# or, as a uv-managed tool
+uv tool install agent-radar
+
+# poetry
+poetry add agent-radar
+
+# Local / editable install while hacking on the source
 git clone <repo-url> agent-radar
 cd agent-radar
-python3 scanner.py --help   # smoke-test
+pip install -e .
+agent-radar --help
+```
+
+You can also run it without installing:
+
+```bash
+python -m agent_radar --help     # from a checkout of the repo
 ```
 
 ### Option B · Install as a Claude Code skill (recommended for daily use)
@@ -92,15 +111,9 @@ following — Claude will load the skill and walk you through the scan:
 - "find the blind spots in my agent config"
 - "benchmark our team's Claude Code adoption"
 
-### Python command cheat-sheet (cross-OS)
-
-| Environment | Python command |
-|---|---|
-| macOS / Linux | `python3 scanner.py ...` |
-| Windows (PowerShell / cmd) | `python scanner.py ...` |
-| Cygwin (no native cygwin python) | `/c/Python313/python.exe scanner.py ...` or switch to PowerShell |
-
-Examples below use `python3`; Windows users substitute `python`.
+The skill invokes the same `agent-radar` CLI, so the package must be
+`pip install`-ed first (or you must launch it via `python -m agent_radar`
+from inside the skill directory).
 
 ## Run
 
@@ -110,21 +123,33 @@ Scan the current repo + your user-space, generate the full HTML report
 including the actual-usage radar:
 
 ```bash
-python3 scanner.py --include-home . -o scan.json
-python3 session_scanner.py -o session.json
-python3 report.py scan.json --session session.json -o report.html
+agent-radar scan --include-home . -o scan.json
+agent-radar session -o session.json
+agent-radar report scan.json --session session.json -o report.html
 open report.html        # macOS
 xdg-open report.html    # Linux
 start report.html       # Windows (PowerShell / cmd)
 ```
+
+### Subcommands
+
+| Subcommand | Purpose |
+|---|---|
+| `agent-radar scan` | Scan filesystem fingerprints (six config dimensions) |
+| `agent-radar session` | Scan local `~/.claude/projects/*.jsonl` for actual-usage metrics |
+| `agent-radar report` | Build single-file HTML radar report |
+| `agent-radar usage` | Score OTel events into `usage.json` |
+| `agent-radar merge` | Merge `scan.json` + `usage.json` into `merged.json` |
+
+Each subcommand has its own `--help`. Long form: `python -m agent_radar <sub> ...`.
 
 ### Three scan scenarios
 
 **Scenario 1 · Single repo (simplest)**
 
 ```bash
-python3 scanner.py /path/to/repo -o scan.json
-python3 report.py scan.json -o report.html
+agent-radar scan /path/to/repo -o scan.json
+agent-radar report scan.json -o report.html
 ```
 
 **Scenario 2 · Personal full-body scan (includes user-space)**
@@ -133,8 +158,8 @@ Pulls `~/.claude/` into the scan so you can see user-level vs project-level
 config separation:
 
 ```bash
-python3 scanner.py --include-home /path/to/repo -o scan.json
-python3 report.py scan.json -o report.html
+agent-radar scan --include-home /path/to/repo -o scan.json
+agent-radar report scan.json -o report.html
 ```
 
 **Scenario 3 · Team benchmark (multi-repo)**
@@ -142,45 +167,48 @@ python3 report.py scan.json -o report.html
 Scan many repos at once. The report auto-generates a ranking table:
 
 ```bash
-python3 scanner.py /repos/a /repos/b /repos/c -o scan.json
-python3 report.py scan.json -o report.html
+agent-radar scan /repos/a /repos/b /repos/c -o scan.json
+agent-radar report scan.json -o report.html
 ```
 
 ### Add actual-usage measurement (full two-layer analysis)
 
-`session_scanner.py` reads local `~/.claude/projects/*.jsonl` and emits
+`agent-radar session` reads local `~/.claude/projects/*.jsonl` and emits
 usage metrics — actual tool invocations, Skill firings, MCP calls, and
-user-correction rate. Pair it with `report.py --session` to get a second
-radar in the HTML:
+user-correction rate. Pair it with `agent-radar report --session` to get a
+second radar in the HTML:
 
 ```bash
 # 1. Scan all projects (defaults to ~/.claude/projects/)
-python3 session_scanner.py -o session.json
+agent-radar session -o session.json
 
 # Or restrict to specific repos
-python3 session_scanner.py /path/to/repo -o session.json
+agent-radar session /path/to/repo -o session.json
 
 # 2. Cygwin / cross-OS: point at the actual projects dir
-python3 session_scanner.py --projects-dir /c/Users/<you>/.claude/projects -o session.json
+agent-radar session --projects-dir /c/Users/<you>/.claude/projects -o session.json
 
 # 3. Build the two-layer radar report
-python3 report.py scan.json --session session.json -o report.html
+agent-radar report scan.json --session session.json -o report.html
 ```
 
 ### Output files
 
 | File | Produced by | Contents |
 |---|---|---|
-| `scan.json` | `scanner.py` | Config completeness: six dimension scores + per-signal detail |
-| `session.json` | `session_scanner.py` | Actual usage: per-project tool calls, Skill / MCP triggers, correction rate |
-| `report.html` | `report.py` | Single-file, offline-viewable HTML report with radars + ranking + accordions |
+| `scan.json` | `agent-radar scan` | Config completeness: six dimension scores + per-signal detail |
+| `session.json` | `agent-radar session` | Actual usage: per-project tool calls, Skill / MCP triggers, correction rate |
+| `report.html` | `agent-radar report` | Single-file, offline-viewable HTML report with radars + ranking + accordions |
 
 ### Full CLI flags
 
 ```bash
-python3 scanner.py --help          # paths, --include-home, -o
-python3 session_scanner.py --help  # paths, --projects-dir, -o
-python3 report.py --help           # input, --session, -o
+agent-radar --help                  # list subcommands + version
+agent-radar scan --help             # paths, --include-home, -o
+agent-radar session --help          # paths, --projects-dir, -o
+agent-radar report --help           # input, --session, --merged, --lang, -o
+agent-radar usage --help            # --otel-log, --scan, --target, --account, ...
+agent-radar merge --help            # scan.json, usage.json, -o
 ```
 
 ## Limitations
@@ -188,7 +216,7 @@ python3 report.py --help           # input, --session, -o
 - Only effective for targets you have filesystem access to (your own / your team's repos).
 - For strangers with only code or a conversation, reliable detection is impossible,
   and it edges into the gray area of surveilling others — not recommended.
-- `session_scanner.py` only reads local JSONL; cross-machine measurement needs OpenTelemetry.
+- `agent-radar session` only reads local JSONL; cross-machine measurement needs OpenTelemetry (`agent-radar usage`).
 - Correction rate is matched on literal patterns (no/don't/stop/不對/還原…); semantic
   corrections (a long explanation of why Claude was wrong) are not detected.
 - The scoring weights are tunable heuristics — calibrate them against your team's
