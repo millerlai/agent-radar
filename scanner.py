@@ -123,7 +123,7 @@ def _git_log_count(repo: Path, pathspec: str) -> int:
     try:
         out = subprocess.run(
             ["git", "-C", str(repo), "log", "--oneline", "--", pathspec],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, encoding="utf-8", errors="replace", timeout=10,
         )
         if out.returncode != 0:
             return 0
