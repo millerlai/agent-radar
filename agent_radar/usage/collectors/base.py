@@ -12,7 +12,7 @@ from typing import Protocol
 @dataclass
 class UsageWindow:
     """Aggregated usage signals for a single attribution scope (user or team)
-    within a time window. Field shapes follow SPEC §5."""
+    within a time window."""
 
     since: datetime
     until: datetime

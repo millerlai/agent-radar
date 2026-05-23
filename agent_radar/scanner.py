@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-agent-radar :: scanner.py
-=========================
+agent-radar :: agent_radar.scanner
+==================================
 偵測「個人 / 團隊使用 Claude Code 生態的能力邊界」。
 
 設計理念
@@ -22,17 +22,17 @@ agent-radar :: scanner.py
 用法
 ----
   # 掃單一目錄 (個人 / 單一 repo)
-  python scanner.py /path/to/repo
+  agent-radar scan /path/to/repo
 
   # 掃多個 repo (團隊 benchmark)
-  python scanner.py /repos/a /repos/b /repos/c
+  agent-radar scan /repos/a /repos/b /repos/c
 
   # 一併納入 user-space (~/.claude)
-  python scanner.py --include-home /path/to/repo
+  agent-radar scan --include-home /path/to/repo
 
 輸出
 ----
-  stdout 印出 JSON。搭配 report.py 產生 HTML 雷達圖報告。
+  stdout 印出 JSON。搭配 ``agent-radar report`` 產生 HTML 雷達圖報告。
 """
 
 import argparse

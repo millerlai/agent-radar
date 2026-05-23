@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-agent-radar :: session_scanner.py
-=================================
+agent-radar :: agent_radar.session_scanner
+==========================================
 量測「實際運用度」(dynamic usage)。
 
-scanner.py 量的是配置 (静態指紋);本工具讀取 Claude Code 本機 session 紀錄
-(~/.claude/projects/*/*.jsonl),量化使用者真實用了 Claude Code 多少功能。
+``agent_radar.scanner`` 量的是配置 (靜態指紋);本工具讀取 Claude Code 本機
+session 紀錄 (~/.claude/projects/*/*.jsonl),量化使用者真實用了 Claude Code
+多少功能。
 
 設計理念
 --------
 配置完整度與實際運用度是兩件事。寫了 CLAUDE.md 不代表它有在指導 session,
 裝了 MCP server 不代表真的被呼叫,定義了 skill 不代表 description 觸發得到。
 本工具讀取 JSONL 把這些「真正發生的事」量化成六大運用維度分數,
-與 scanner.py 配置分數疊起來,落差即為改善空間。
+與 ``agent_radar.scanner`` 配置分數疊起來,落差即為改善空間。
 
 六大運用維度
 -----------
@@ -26,13 +27,13 @@ scanner.py 量的是配置 (静態指紋);本工具讀取 Claude Code 本機 ses
 用法
 ----
   # 掃 user-space 所有 projects
-  python session_scanner.py -o session.json
+  agent-radar session -o session.json
 
   # 只統計某幾個 project (用原始 repo 路徑)
-  python session_scanner.py /path/to/repo -o session.json
+  agent-radar session /path/to/repo -o session.json
 
   # 自訂 projects 根目錄
-  python session_scanner.py --projects-dir /custom/.claude/projects -o session.json
+  agent-radar session --projects-dir /custom/.claude/projects -o session.json
 """
 
 import argparse

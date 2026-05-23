@@ -1,7 +1,7 @@
 """Align scan.json (config) with usage.json (usage) → merged.json.
 
 The merged structure powers the dual-track radar + gap table + improvement
-list in report.py. SPEC §7.
+list in agent_radar.report.
 
 Output shape:
 {
@@ -189,7 +189,7 @@ def _group_findings(findings: list) -> dict:
 
 def main():
     ap = argparse.ArgumentParser(description="Merge scan.json + usage.json into merged.json")
-    ap.add_argument("scan", help="scanner.py 產出的 JSON")
+    ap.add_argument("scan", help="agent-radar scan 產出的 JSON")
     ap.add_argument("usage", help="usage 模組產出的 JSON")
     ap.add_argument("-o", "--output", default="merged.json")
     args = ap.parse_args()
