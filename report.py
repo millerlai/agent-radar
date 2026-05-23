@@ -19,6 +19,164 @@ from pathlib import Path
 PALETTE = ["#4ade80", "#38bdf8", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#2dd4bf", "#f87171"]
 
 
+# ----------------------------------------------------------------------------
+# i18n: UI 字串 + 維度 / 層級翻譯
+# 預設語言 en;CLI 可用 --lang 或互動式選單覆寫
+# ----------------------------------------------------------------------------
+
+STRINGS = {
+    "en": {
+        "html_lang": "en",
+        "title_scan": "AI Agent Capability Boundary Diagnostic",
+        "title_merged": "AI Agent Capability Boundary · Config vs Usage",
+        "kicker_scan": "agent-radar · capability boundary scan",
+        "kicker_merged": "agent-radar · config vs usage",
+        "h1_scan_pre": "AI Agent ",
+        "h1_scan_em": "Capability Boundary",
+        "h1_scan_post": " Diagnostic Report",
+        "h1_merged_pre": "Capability ",
+        "h1_merged_em": "Config vs Usage",
+        "h1_merged_post": " Gap Diagnostic",
+        "sub_scan": ("Quantifies the Claude Code ecosystem's \"configuration maturity\" by "
+                     "scanning filesystem fingerprints (CLAUDE.md, skills, MCP, hooks, "
+                     "subagents, git history). Scores reflect setup completeness, not actual usage."),
+        "sub_merged": ("Overlays scanner's \"static configuration\" with OTel events' \"actual "
+                       "usage\" on the same axes. The area between solid and dashed lines is "
+                       "the capability-waste zone — what you configured but never used."),
+        "h2_maturity": "Maturity Radar",
+        "h2_team": "Team Benchmark",
+        "h2_usage": "Actual Usage Radar",
+        "h2_dual": "Dual-Track Radar · Config × Usage",
+        "h2_top_gaps": "Top Gaps",
+        "card_sub_usage": ("Reads local ~/.claude/projects/ JSONL logs and quantifies tool "
+                          "calls, Skill triggers, MCP calls, and user-correction rate within "
+                          "sessions. The gap from the configuration radar above is your "
+                          "improvement headroom."),
+        "card_sub_top_gaps": ("Top 5 items sorted by config vs usage gap. Large gap = configured "
+                              "but unused — the cheapest capability wins."),
+        "th_num": "#",
+        "th_target": "Target",
+        "th_overall": "Overall",
+        "th_level": "Level",
+        "th_dim": "Dimension",
+        "th_config": "Config",
+        "th_usage": "Usage",
+        "th_gap": "Gap",
+        "team_avg_pre": "Team average maturity ",
+        "team_avg_post": " / 100",
+        "blind_label": "BLIND SPOT",
+        "note_label": "NOTE",
+        "col_config": "CONFIG",
+        "col_usage": "USAGE",
+        "no_findings": "No findings",
+        "no_usage_signals": "No usage signals",
+        "footer_scan": "agent-radar · static fingerprint scan · configuration completeness ≠ actual usage",
+        "footer_merged": "agent-radar · static fingerprint + OTel telemetry · config ≠ usage",
+        "dual_legend_cfg": "Config (static fingerprint)",
+        "dual_legend_use": "Usage (OTel events)",
+        "dual_legend_na": "iteration dim · USAGE = N/A (no corresponding signal)",
+        "gap_meta_config": "· config ",
+        "gap_meta_usage": "· usage ",
+        "gap_meta_gap": "· gap ",
+        "no_targets": "No targets scanned.",
+    },
+    "zh": {
+        "html_lang": "zh-Hant",
+        "title_scan": "AI Agent 能力邊界診斷",
+        "title_merged": "AI Agent 能力邊界診斷 · 配置 vs 運用",
+        "kicker_scan": "agent-radar · capability boundary scan",
+        "kicker_merged": "agent-radar · config vs usage",
+        "h1_scan_pre": "AI Agent ",
+        "h1_scan_em": "能力邊界",
+        "h1_scan_post": "診斷報告",
+        "h1_merged_pre": "能力",
+        "h1_merged_em": "配置 vs 運用",
+        "h1_merged_post": "落差診斷",
+        "sub_scan": ("透過掃描檔案系統指紋 (CLAUDE.md · skills · MCP · hooks · subagents · "
+                     "git history),量化 Claude Code 生態的「配置成熟度」。分數反映設定完整度,"
+                     "非實際運用度。"),
+        "sub_merged": ("把 scanner 的「靜態配置」與 OTel events 的「實際運用」疊在同一組軸上。"
+                       "實線與虛線之間的面積就是能力浪費區 — 你配了但沒在用的部分。"),
+        "h2_maturity": "成熟度雷達 · Maturity Radar",
+        "h2_team": "團隊排行 · Team Benchmark",
+        "h2_usage": "運用度雷達 · Actual Usage",
+        "h2_dual": "雙軌雷達 · Config × Usage",
+        "h2_top_gaps": "改善清單 · Top Gaps",
+        "card_sub_usage": ("讀取本機 ~/.claude/projects/ JSONL,量化 session 內真正發生的工具呼叫、"
+                          "Skill 觸發、MCP 呼叫、使用者糾正率。與上方配置雷達的「落差」即為改善空間。"),
+        "card_sub_top_gaps": ("依「配置 vs 運用」落差排序的前 5 項。落差大 = 你配了但沒在用,"
+                              "最有機會用最少力氣補上的能力。"),
+        "th_num": "#",
+        "th_target": "目標",
+        "th_overall": "總分",
+        "th_level": "層級",
+        "th_dim": "維度",
+        "th_config": "配置",
+        "th_usage": "運用",
+        "th_gap": "落差",
+        "team_avg_pre": "團隊平均成熟度 ",
+        "team_avg_post": " / 100",
+        "blind_label": "盲區",
+        "note_label": "NOTE",
+        "col_config": "配置 · CONFIG",
+        "col_usage": "運用 · USAGE",
+        "no_findings": "無 findings",
+        "no_usage_signals": "無 usage 訊號",
+        "footer_scan": "agent-radar · static fingerprint scan · 配置完整度 ≠ 實際運用度",
+        "footer_merged": "agent-radar · static fingerprint + OTel telemetry · 配置 ≠ 運用",
+        "dual_legend_cfg": "配置 · CONFIG (static fingerprint)",
+        "dual_legend_use": "運用 · USAGE (OTel events)",
+        "dual_legend_na": "iteration 維度 · USAGE = N/A (無對應訊號)",
+        "gap_meta_config": "· 配置 ",
+        "gap_meta_usage": "· 運用 ",
+        "gap_meta_gap": "· 落差 ",
+        "no_targets": "未掃描任何目標。",
+    },
+}
+
+# 維度 key 的英文標籤 (scanner.py 預設輸出繁中)
+DIMENSIONS_I18N = {
+    "en": {
+        "claude_md": "CLAUDE.md Maturity",
+        "skills": "Skills Usage",
+        "mcp": "MCP Integration",
+        "automation": "Automation",
+        "context_hygiene": "Context Hygiene",
+        "iteration": "Iteration & Maintenance",
+    },
+}
+
+# 成熟度層級英文版 (對應 scanner.LEVELS)
+LEVELS_I18N = {
+    "en": [
+        (0, "L0 · Unaware"),
+        (20, "L1 · Reactive"),
+        (40, "L2 · Structured"),
+        (60, "L3 · Advanced"),
+        (80, "L4 · Mastery"),
+    ],
+}
+
+
+def _t(lang, key):
+    """查表;查不到就 fallback 到 en。"""
+    return STRINGS.get(lang, STRINGS["en"]).get(key, STRINGS["en"].get(key, key))
+
+
+def _dim_labels(data_dims, lang):
+    """回傳 {dim_key: label} 的字典 — 英文模式查 DIMENSIONS_I18N,中文模式用 JSON 原值。"""
+    if lang == "en":
+        return {k: DIMENSIONS_I18N["en"].get(k, v) for k, v in data_dims.items()}
+    return dict(data_dims)
+
+
+def _levels(data_levels, lang):
+    """回傳 [(threshold, label)] — 英文模式查 LEVELS_I18N,中文模式用 JSON 原值。"""
+    if lang == "en":
+        return LEVELS_I18N["en"]
+    return data_levels
+
+
 def _polar_point(cx, cy, radius, value, i, n):
     ang = -math.pi / 2 + (2 * math.pi * i / n)
     r = radius * (value / 100)
@@ -122,7 +280,7 @@ def findings_html(target):
 DIM_LABELS = {}  # 由 main 注入
 
 
-def build_usage_section(session_data):
+def build_usage_section(session_data, lang="en"):
     """生成「實際運用度」雷達卡 (來自 session_scanner.py 輸出)。"""
     if not session_data:
         return ""
@@ -133,7 +291,8 @@ def build_usage_section(session_data):
 
     dim_keys = list(dims.keys())
     # 重複使用 radar_svg,需要把 usage targets 的 scores 套上 dim_keys
-    radar = radar_svg(targets, dim_keys, dims, idx_offset=3)
+    dims_localized = _dim_labels(dims, lang)
+    radar = radar_svg(targets, dim_keys, dims_localized, idx_offset=3)
 
     legend = "".join(
         f'<span class="leg"><i style="background:{PALETTE[(i+3)%len(PALETTE)]}"></i>'
@@ -141,7 +300,7 @@ def build_usage_section(session_data):
         for i, t in enumerate(targets))
 
     blind = "".join(
-        f'<p class="blind"><span>盲區</span>{b}</p>'
+        f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{b}</p>'
         for b in session_data.get("blind_spots", []))
 
     # 個別 target 的明細
@@ -171,9 +330,8 @@ def build_usage_section(session_data):
 
     return f"""
     <section class="card">
-      <h2>運用度雷達 · Actual Usage</h2>
-      <p class="card-sub">讀取本機 ~/.claude/projects/ JSONL,量化 session 內真正發生的工具呼叫、
-      Skill 觸發、MCP 呼叫、使用者糾正率。與上方配置雷達的「落差」即為改善空間。</p>
+      <h2>{_t(lang,"h2_usage")}</h2>
+      <p class="card-sub">{_t(lang,"card_sub_usage")}</p>
       <div class="radar-wrap">
         {radar}
         <div class="legend">{legend}</div>
@@ -183,14 +341,15 @@ def build_usage_section(session_data):
     </section>"""
 
 
-def build_html(data, session_data=None):
+def build_html(data, session_data=None, lang="en"):
     global DIM_LABELS
-    DIM_LABELS = data["dimensions"]
+    dims_localized = _dim_labels(data["dimensions"], lang)
+    DIM_LABELS = dims_localized
     dim_keys = list(data["dimensions"].keys())
     targets = data["targets"]
 
     if not targets:
-        return "<html><body>No targets scanned.</body></html>"
+        return f"<html><body>{_t(lang,'no_targets')}</body></html>"
 
     # 團隊聚合 (>1 目標時顯示)
     is_team = len(targets) > 1
@@ -201,7 +360,7 @@ def build_html(data, session_data=None):
     team_overall = round(sum(team_avg.values()) / len(team_avg), 1)
 
     # --- 雷達圖 ---
-    radar = radar_svg(targets, dim_keys, data["dimensions"])
+    radar = radar_svg(targets, dim_keys, dims_localized)
 
     # --- 圖例 ---
     legend = "".join(
@@ -222,12 +381,12 @@ def build_html(data, session_data=None):
                 </tr>""" for i, t in enumerate(ranked))
         ranking = f"""
         <section class="card">
-          <h2>團隊排行 · Team Benchmark</h2>
+          <h2>{_t(lang,"h2_team")}</h2>
           <table class="rank-table">
-            <thead><tr><th>#</th><th>目標</th><th>總分</th><th>層級</th></tr></thead>
+            <thead><tr><th>{_t(lang,"th_num")}</th><th>{_t(lang,"th_target")}</th><th>{_t(lang,"th_overall")}</th><th>{_t(lang,"th_level")}</th></tr></thead>
             <tbody>{rows}</tbody>
           </table>
-          <p class="team-avg">團隊平均成熟度 <b>{team_overall:.0f}</b> / 100</p>
+          <p class="team-avg">{_t(lang,"team_avg_pre")}<b>{team_overall:.0f}</b>{_t(lang,"team_avg_post")}</p>
         </section>"""
 
     # --- 個別目標明細 ---
@@ -244,7 +403,7 @@ def build_html(data, session_data=None):
           </div>
         </div>
         {findings_html(t)}
-        {"".join(f'<p class="blind"><span>盲區</span>{b}</p>' for b in t.get('blind_spots', []))}
+        {"".join(f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{b}</p>' for b in t.get('blind_spots', []))}
       </section>""" for t in targets)
 
     # --- 層級量尺 ---
@@ -252,14 +411,14 @@ def build_html(data, session_data=None):
         f'<div class="lv"><b>{lbl.split("·")[0].strip()}</b>'
         f'<span>{lbl.split("·")[1].strip() if "·" in lbl else ""}</span>'
         f'<i>{th}+</i></div>'
-        for th, lbl in data["levels"])
+        for th, lbl in _levels(data["levels"], lang))
 
     return f"""<!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="{_t(lang,"html_lang")}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Agent 能力邊界診斷</title>
+<title>{_t(lang,"title_scan")}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
@@ -382,14 +541,13 @@ def build_html(data, session_data=None):
 <body>
   <div class="wrap">
     <header class="masthead">
-      <div class="kicker">agent-radar · capability boundary scan</div>
-      <h1>AI Agent <span class="em">能力邊界</span>診斷報告</h1>
-      <p class="sub">透過掃描檔案系統指紋 (CLAUDE.md · skills · MCP · hooks · subagents · git history)，
-      量化 Claude Code 生態的「配置成熟度」。分數反映設定完整度，非實際運用度。</p>
+      <div class="kicker">{_t(lang,"kicker_scan")}</div>
+      <h1>{_t(lang,"h1_scan_pre")}<span class="em">{_t(lang,"h1_scan_em")}</span>{_t(lang,"h1_scan_post")}</h1>
+      <p class="sub">{_t(lang,"sub_scan")}</p>
     </header>
 
     <section class="card">
-      <h2>成熟度雷達 · Maturity Radar</h2>
+      <h2>{_t(lang,"h2_maturity")}</h2>
       <div class="radar-wrap">
         {radar}
         <div class="legend">{legend}</div>
@@ -399,11 +557,11 @@ def build_html(data, session_data=None):
 
     {ranking}
 
-    {build_usage_section(session_data)}
+    {build_usage_section(session_data, lang=lang)}
 
     {details}
 
-    <footer>agent-radar · static fingerprint scan · 配置完整度 ≠ 實際運用度</footer>
+    <footer>{_t(lang,"footer_scan")}</footer>
   </div>
 </body>
 </html>"""
@@ -523,7 +681,7 @@ def _score_pill(value):
     return f'<span class="pill {cls}">{value:.0f}</span>'
 
 
-def gap_table_html(target, dim_labels):
+def gap_table_html(target, dim_labels, lang="en"):
     rows = []
     for dim, scores in target["scores"].items():
         rows.append(f"""
@@ -535,12 +693,12 @@ def gap_table_html(target, dim_labels):
           </tr>""")
     return f"""
       <table class="gap-table">
-        <thead><tr><th>維度</th><th>配置</th><th>運用</th><th>落差</th></tr></thead>
+        <thead><tr><th>{_t(lang,"th_dim")}</th><th>{_t(lang,"th_config")}</th><th>{_t(lang,"th_usage")}</th><th>{_t(lang,"th_gap")}</th></tr></thead>
         <tbody>{''.join(rows)}</tbody>
       </table>"""
 
 
-def top_gaps_html(merged_targets):
+def top_gaps_html(merged_targets, lang="en"):
     """整份報告中跨 target 撿出落差最大的前 5 項。"""
     flat = []
     for t in merged_targets:
@@ -558,23 +716,22 @@ def top_gaps_html(merged_targets):
           <div class="gap-hint">{g['hint']}</div>
           <div class="gap-meta">
             <span>{g['target']}</span>
-            <span>· 配置 <b>{g['config']:.0f}</b></span>
-            <span>· 運用 <b>{(f"{g['usage']:.0f}" if g['usage'] is not None else 'N/A')}</b></span>
-            <span>· 落差 <b>{g['gap']:.0f}</b></span>
+            <span>{_t(lang,"gap_meta_config")}<b>{g['config']:.0f}</b></span>
+            <span>{_t(lang,"gap_meta_usage")}<b>{(f"{g['usage']:.0f}" if g['usage'] is not None else 'N/A')}</b></span>
+            <span>{_t(lang,"gap_meta_gap")}<b>{g['gap']:.0f}</b></span>
           </div>
         </div>
       </li>""" for i, g in enumerate(top))
 
     return f"""
       <section class="card">
-        <h2>改善清單 · Top Gaps</h2>
-        <p class="card-sub">依「配置 vs 運用」落差排序的前 5 項。落差大 = 你配了但沒在用,
-        最有機會用最少力氣補上的能力。</p>
+        <h2>{_t(lang,"h2_top_gaps")}</h2>
+        <p class="card-sub">{_t(lang,"card_sub_top_gaps")}</p>
         <ol class="gap-list">{rows}</ol>
       </section>"""
 
 
-def merged_findings_html(target, dim_labels):
+def merged_findings_html(target, dim_labels, lang="en"):
     """合併視角:每個維度展開後左右並列 config / usage findings。"""
     cfg_by = target.get("config_findings_by_dim", {})
     use_by = target.get("usage_findings_by_dim", {})
@@ -601,12 +758,12 @@ def merged_findings_html(target, dim_labels):
             </summary>
             <div class="dual-findings">
               <div class="col">
-                <div class="col-head">配置 · CONFIG</div>
-                {cfg_rows or '<div class="f-detail">無 findings</div>'}
+                <div class="col-head">{_t(lang,"col_config")}</div>
+                {cfg_rows or f'<div class="f-detail">{_t(lang,"no_findings")}</div>'}
               </div>
               <div class="col">
-                <div class="col-head">運用 · USAGE</div>
-                {use_rows or '<div class="f-detail">無 usage 訊號</div>'}
+                <div class="col-head">{_t(lang,"col_usage")}</div>
+                {use_rows or f'<div class="f-detail">{_t(lang,"no_usage_signals")}</div>'}
               </div>
             </div>
           </details>""")
@@ -671,14 +828,14 @@ _MERGED_EXTRA_CSS = """
 """
 
 
-def build_merged_html(merged):
+def build_merged_html(merged, lang="en"):
     """Render the dual-track (config vs usage) report."""
     dim_keys = list(merged["dimensions"].keys())
-    dim_labels = merged["dimensions"]
+    dim_labels = _dim_labels(merged["dimensions"], lang)
     targets = merged["targets"]
 
     if not targets:
-        return "<html><body>No targets.</body></html>"
+        return f"<html><body>{_t(lang,'no_targets')}</body></html>"
 
     radar = dual_radar_svg(targets, dim_keys, dim_labels)
 
@@ -693,9 +850,9 @@ def build_merged_html(merged):
 
     dual_legend = (
         '<div class="dual-legend">'
-        '<span class="swatch"><span class="sw-line"></span>配置 · CONFIG (static fingerprint)</span>'
-        '<span class="swatch"><span class="sw-line dashed"></span>運用 · USAGE (OTel events)</span>'
-        '<span class="swatch">iteration 維度 · USAGE = N/A (無對應訊號)</span>'
+        f'<span class="swatch"><span class="sw-line"></span>{_t(lang,"dual_legend_cfg")}</span>'
+        f'<span class="swatch"><span class="sw-line dashed"></span>{_t(lang,"dual_legend_use")}</span>'
+        f'<span class="swatch">{_t(lang,"dual_legend_na")}</span>'
         '</div>')
 
     # gap section per target
@@ -711,24 +868,24 @@ def build_merged_html(merged):
             <span class="lvl-tag">{t.get('level','')}</span>
           </div>
         </div>
-        {gap_table_html(t, dim_labels)}
-        <div style="margin-top: 18px;">{merged_findings_html(t, dim_labels)}</div>
-        {"".join(f'<p class="blind"><span>盲區</span>{b}</p>' for b in t.get('blind_spots', []))}
-        {"".join(f'<p class="blind"><span>NOTE</span>{n}</p>' for n in t.get('notes', []))}
+        {gap_table_html(t, dim_labels, lang=lang)}
+        <div style="margin-top: 18px;">{merged_findings_html(t, dim_labels, lang=lang)}</div>
+        {"".join(f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{b}</p>' for b in t.get('blind_spots', []))}
+        {"".join(f'<p class="blind"><span>{_t(lang,"note_label")}</span>{n}</p>' for n in t.get('notes', []))}
       </section>""" for t in targets)
 
     level_scale = "".join(
         f'<div class="lv"><b>{lbl.split("·")[0].strip()}</b>'
         f'<span>{lbl.split("·")[1].strip() if "·" in lbl else ""}</span>'
         f'<i>{th}+</i></div>'
-        for th, lbl in merged.get("levels", []))
+        for th, lbl in _levels(merged.get("levels", []), lang))
 
     return f"""<!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="{_t(lang,"html_lang")}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Agent 能力邊界診斷 · 配置 vs 運用</title>
+<title>{_t(lang,"title_merged")}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
@@ -820,14 +977,13 @@ def build_merged_html(merged):
 <body>
   <div class="wrap">
     <header class="masthead">
-      <div class="kicker">agent-radar · config vs usage</div>
-      <h1>能力<span class="em">配置 vs 運用</span>落差診斷</h1>
-      <p class="sub">把 scanner 的「靜態配置」與 OTel events 的「實際運用」疊在同一組軸上。
-      實線與虛線之間的面積就是能力浪費區 — 你配了但沒在用的部分。</p>
+      <div class="kicker">{_t(lang,"kicker_merged")}</div>
+      <h1>{_t(lang,"h1_merged_pre")}<span class="em">{_t(lang,"h1_merged_em")}</span>{_t(lang,"h1_merged_post")}</h1>
+      <p class="sub">{_t(lang,"sub_merged")}</p>
     </header>
 
     <section class="card">
-      <h2>雙軌雷達 · Config × Usage</h2>
+      <h2>{_t(lang,"h2_dual")}</h2>
       <div class="radar-wrap">
         {radar}
         <div class="legend">{legend}</div>
@@ -836,14 +992,29 @@ def build_merged_html(merged):
       <div class="scale">{level_scale}</div>
     </section>
 
-    {top_gaps_html(targets)}
+    {top_gaps_html(targets, lang=lang)}
 
     {target_sections}
 
-    <footer>agent-radar · static fingerprint + OTel telemetry · 配置 ≠ 運用</footer>
+    <footer>{_t(lang,"footer_merged")}</footer>
   </div>
 </body>
 </html>"""
+
+
+def _prompt_lang():
+    """互動式選單;非 TTY 環境直接回 'en'。"""
+    import sys
+    if not sys.stdin.isatty():
+        return "en"
+    print("Choose report language / 請選擇報告語言:")
+    print("  [1] English (default)")
+    print("  [2] 繁體中文")
+    try:
+        choice = input("Select (1/2): ").strip()
+    except EOFError:
+        return "en"
+    return "zh" if choice == "2" else "en"
 
 
 def main():
@@ -854,12 +1025,16 @@ def main():
                     help="session_scanner.py 產出的 JSON (可選,加上後報告會多一張運用度雷達)")
     ap.add_argument("--merged", default=None,
                     help="usage.merge 產出的 JSON (雙軌雷達模式 — SPEC §8)")
+    ap.add_argument("--lang", choices=["en", "zh"], default=None,
+                    help="報告語言 (en|zh)。未指定時若為 TTY 會彈出選單,否則預設 en")
     ap.add_argument("-o", "--output", default="report.html")
     args = ap.parse_args()
 
+    lang = args.lang if args.lang else _prompt_lang()
+
     if args.merged:
         merged = json.loads(Path(args.merged).read_text(encoding="utf-8"))
-        html = build_merged_html(merged)
+        html = build_merged_html(merged, lang=lang)
     else:
         if not args.input:
             ap.error("input 為必要參數 (或改用 --merged)")
@@ -867,9 +1042,9 @@ def main():
         session_data = None
         if args.session:
             session_data = json.loads(Path(args.session).read_text(encoding="utf-8"))
-        html = build_html(data, session_data=session_data)
+        html = build_html(data, session_data=session_data, lang=lang)
     Path(args.output).write_text(html, encoding="utf-8")
-    print(f"[ok] 報告已生成: {args.output}")
+    print(f"[ok] report generated ({lang}): {args.output}")
 
 
 if __name__ == "__main__":
