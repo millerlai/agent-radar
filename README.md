@@ -193,3 +193,9 @@ python3 report.py --help           # input, --session, -o
   corrections (a long explanation of why Claude was wrong) are not detected.
 - The scoring weights are tunable heuristics — calibrate them against your team's
   reality before doing cross-person comparisons.
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE).
+
+Copyright 2026 Miller Lai.

@@ -184,3 +184,9 @@ python3 report.py --help           # input, --session, -o
 - session_scanner 只讀本機 JSONL,跨機器需另接 OpenTelemetry。
 - 糾正率僅匹配字面 pattern,語意級糾正偵測不到。
 - 評分權重是可調的啟發式,建議依團隊實況校準後再做跨人比較。
+
+## 授權
+
+Apache License 2.0 — 詳見 [LICENSE](LICENSE)。
+
+Copyright 2026 Miller Lai。
