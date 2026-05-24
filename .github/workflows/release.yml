@@ -1,0 +1,107 @@
+# Release workflow — manual trigger from the GitHub Actions tab.
+#
+# What it does (in one workflow_dispatch run):
+#   1. Bumps `version` in pyproject.toml to the input value
+#   2. Commits, tags `vX.Y.Z`, and pushes both back to main
+#   3. Builds wheel + sdist via uv
+#   4. Publishes to PyPI using Trusted Publisher (OIDC — no token in secrets)
+#   5. Creates a GitHub Release with auto-generated notes (PRs since last tag)
+#
+# One-time setup (do this once before the first run):
+#   PyPI Trusted Publisher
+#     1. Go to https://pypi.org/manage/project/claude-agent-radar/settings/publishing/
+#     2. Click "Add a new pending publisher" (or "Add a new publisher")
+#     3. Fill in:
+#          Owner:            millerlai
+#          Repository name:  agent-radar
+#          Workflow name:    release.yml
+#          Environment name: (leave blank)
+#     4. Save. No PyPI token needs to live in GitHub Secrets.
+#
+#   Branch protection (if main is protected)
+#     The github-actions bot must be allowed to push directly to main, or
+#     the push step will fail. Either disable "Require pull request before
+#     merging" for main, or add github-actions[bot] to the bypass list.
+#
+# To release: Actions tab → "Release" → "Run workflow" → enter `0.1.1`.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.1.1 — no v prefix)"
+        required: true
+        type: string
+
+permissions:
+  contents: write   # push version-bump commit + tag, create GitHub Release
+  id-token: write   # PyPI Trusted Publisher (OIDC)
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate version format
+        run: |
+          if ! [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([abrc][0-9]+|\.post[0-9]+|\.dev[0-9]+)?$ ]]; then
+            echo "::error::Version must look like 0.1.1, 1.0.0a1, 1.0.0.dev1. Got: ${{ inputs.version }}"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Refuse to overwrite an existing tag
+        run: |
+          git fetch --tags
+          if git rev-parse "v${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "::error::Tag v${{ inputs.version }} already exists"
+            exit 1
+          fi
+
+      - name: Refuse to re-publish the current pyproject.toml version
+        run: |
+          current=$(grep -oP '^version = "\K[^"]+' pyproject.toml)
+          if [ "$current" = "${{ inputs.version }}" ]; then
+            echo "::error::pyproject.toml is already at ${{ inputs.version }} — pick a higher version"
+            exit 1
+          fi
+
+      - name: Bump pyproject.toml version
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ inputs.version }}"/' pyproject.toml
+          grep '^version = ' pyproject.toml
+
+      - name: Commit, tag, push to main
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml
+          git commit -m "chore: release ${{ inputs.version }}"
+          git tag -a "v${{ inputs.version }}" -m "Release ${{ inputs.version }}"
+          git push origin HEAD:main
+          git push origin "v${{ inputs.version }}"
+
+      - name: Build wheel + sdist
+        run: uv build
+
+      - name: Publish to PyPI (Trusted Publisher / OIDC)
+        run: uv publish
+
+      - name: Create GitHub Release with auto-generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ inputs.version }}" \
+            --title "v${{ inputs.version }}" \
+            --generate-notes \
+            dist/*
