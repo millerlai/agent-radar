@@ -62,17 +62,32 @@ The total score maps onto five levels: L0 (unaware) → L4 (mastery).
 
 ### Option A · Install from PyPI / source (recommended)
 
-Works with `pip`, `uv`, and `poetry`. Once installed, the `agent-radar`
-console command is on your `PATH`.
+Works with `pip`, `uv`, and `poetry`. After install, verify the command
+is on your `PATH`:
 
 ```bash
-# pip
+agent-radar --help
+```
+
+If the verify step prints help, you're done. If it fails with
+`command not found`, see **"`agent-radar` not on PATH?"** below — the
+module form `python -m agent_radar` always works as a drop-in
+replacement.
+
+```bash
+# pip (system / venv)
 pip install agent-radar
+
+# pip --user (no admin needed; see PATH note below on Windows)
+pip install --user agent-radar
 
 # uv
 uv pip install agent-radar
-# or, as a uv-managed tool
+# or, as a uv-managed tool (handles PATH for you)
 uv tool install agent-radar
+
+# pipx (isolated env, handles PATH for you — recommended on Windows)
+pipx install agent-radar
 
 # poetry
 poetry add agent-radar
@@ -84,10 +99,24 @@ pip install -e .
 agent-radar --help
 ```
 
-You can also run it without installing:
+#### `agent-radar` not on PATH?
+
+Two common causes:
+
+1. **`pip install --user` on Windows** drops `agent-radar.exe` into
+   `%APPDATA%\Python\Python3XX\Scripts\`, which is **not** on `PATH` by
+   default. Either add that folder to `PATH`, or reinstall via
+   `pipx install agent-radar` / `uv tool install agent-radar` — both
+   wire up the entry point automatically.
+2. **Using a venv that isn't activated** — activate it, or call the
+   binary by its full path.
+
+In all cases, this module form is a drop-in replacement that needs no
+PATH setup:
 
 ```bash
-python -m agent_radar --help     # from a checkout of the repo
+python -m agent_radar --help
+python -m agent_radar scan ...     # same args as `agent-radar scan ...`
 ```
 
 ### Option B · Install as a Claude Code skill (recommended for daily use)
@@ -120,16 +149,22 @@ from inside the skill directory).
 ### 30-second quick start
 
 Scan the current repo + your user-space, generate the full HTML report
-including the actual-usage radar:
+including the actual-usage radar. Run from the repo you want to scan:
 
 ```bash
 agent-radar scan --include-home . -o scan.json
 agent-radar session -o session.json
 agent-radar report scan.json --session session.json -o report.html
+
+# Open the report
 open report.html        # macOS
 xdg-open report.html    # Linux
 start report.html       # Windows (PowerShell / cmd)
 ```
+
+If `agent-radar` is not found, swap every `agent-radar` for
+`python -m agent_radar` (same arguments). See
+[**`agent-radar` not on PATH?**](#agent-radar-not-on-path) above.
 
 ### Subcommands
 
