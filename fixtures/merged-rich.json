@@ -1,77 +1,62 @@
 {
-  "dimensions": {
-    "claude_md": "CLAUDE.md 成熟度",
-    "skills": "Skills 運用",
-    "mcp": "MCP 整合",
-    "automation": "自動化",
-    "context_hygiene": "情境衛生",
-    "iteration": "迭代與維護"
-  },
-  "usage_dimensions": {
-    "claude_md": "CLAUDE.md 生效度 (間接)",
-    "skills": "Skills 運用",
-    "mcp": "MCP 運用",
-    "automation": "自動化運用",
-    "context_hygiene": "情境引用",
-    "iteration": "迭代與維護"
-  },
-  "levels": [
-    [
-      0,
-      "L0 · 未使用 (Unaware)"
-    ],
-    [
-      20,
-      "L1 · 萌芽 (Reactive)"
-    ],
-    [
-      40,
-      "L2 · 結構化 (Structured)"
-    ],
-    [
-      60,
-      "L3 · 進階 (Advanced)"
-    ],
-    [
-      80,
-      "L4 · 精煉 (Mastery)"
-    ]
+  "dimensions": [
+    "claude_md",
+    "skills",
+    "mcp",
+    "automation",
+    "context_hygiene",
+    "iteration"
+  ],
+  "usage_dimensions": [
+    "claude_md",
+    "skills",
+    "mcp",
+    "automation",
+    "context_hygiene",
+    "iteration"
+  ],
+  "level_thresholds": [
+    0,
+    20,
+    40,
+    60,
+    80
   ],
   "targets": [
     {
       "name": "agent-radar",
       "path": "D:\\project\\agent-radar",
-      "level": "L4 · 精煉 (Mastery)",
-      "config_overall": 92.5,
-      "usage_overall": 80.4,
+      "level_threshold": 20,
+      "config_overall": 28.6,
+      "usage_overall": 81.2,
       "scores": {
         "claude_md": {
-          "config": 91.4,
+          "config": 79.5,
           "usage": 80.0,
-          "gap": 11.4
+          "gap": -0.5
         },
         "skills": {
-          "config": 86.4,
+          "config": 0.0,
           "usage": 80.0,
-          "gap": 6.4
+          "gap": -80.0
         },
         "mcp": {
-          "config": 100.0,
-          "usage": 50.0,
-          "gap": 50.0
+          "config": 0.0,
+          "usage": 54.2,
+          "gap": -54.2
         },
         "automation": {
-          "config": 100.0,
+          "config": 0.0,
           "usage": 100.0,
-          "gap": 0.0
+          "gap": -100.0
         },
         "context_hygiene": {
-          "config": 100.0,
+          "config": 70.0,
           "usage": 92.0,
-          "gap": 8.0
+          "gap": -22.0
         },
         "iteration": {
-          "config": 76.0,
+          "config": 22.0,
           "usage": null,
           "gap": null
         }
@@ -80,258 +65,334 @@
         "claude_md": [
           {
             "dimension": "claude_md",
-            "label": "CLAUDE.md 存在",
+            "label_key": "scan.claude_md.exists",
             "weight": 25,
             "score": 25,
-            "detail": "找到 CLAUDE.md"
+            "detail_key": "scan.claude_md.exists.found",
+            "detail_args": {
+              "paths": "CLAUDE.md"
+            }
           },
           {
             "dimension": "claude_md",
-            "label": "結構化分區",
+            "label_key": "scan.claude_md.structure",
             "weight": 20,
-            "score": 18,
-            "detail": "5 個標題, 命中 4 個分區關鍵字"
+            "score": 20,
+            "detail_key": "scan.claude_md.structure.detail",
+            "detail_args": {
+              "headers": 5,
+              "hints": 1
+            }
           },
           {
             "dimension": "claude_md",
-            "label": "指令式語氣",
+            "label_key": "scan.claude_md.imperative",
             "weight": 15,
-            "score": 12,
-            "detail": "8 處規範語句"
+            "score": 4.5,
+            "detail_key": "scan.claude_md.imperative.detail",
+            "detail_args": {
+              "hits": 3
+            }
           },
           {
             "dimension": "claude_md",
-            "label": "精簡度",
+            "label_key": "scan.claude_md.concise",
             "weight": 15,
             "score": 15,
-            "detail": "黃金區間"
+            "detail_key": "scan.claude_md.concise.detail",
+            "detail_args": {
+              "words": 358
+            }
           },
           {
             "dimension": "claude_md",
-            "label": "@import 引用",
+            "label_key": "scan.claude_md.import",
             "weight": 10,
-            "score": 10,
-            "detail": "2 處 @ 引用"
+            "score": 0,
+            "detail_key": "scan.claude_md.import.none",
+            "detail_args": {}
           },
           {
             "dimension": "claude_md",
-            "label": "Lint: 大小合理",
+            "label_key": "scan.claude_md.lint_size",
             "weight": 15,
             "score": 15,
-            "detail": "2345 chars (合規)"
+            "detail_key": "scan.claude_md.lint_size.ok",
+            "detail_args": {
+              "chars": 2345
+            }
           }
         ],
         "skills": [
           {
             "dimension": "skills",
-            "label": "Skills 存在",
+            "label_key": "scan.skills.exists",
             "weight": 35,
-            "score": 35,
-            "detail": "找到 6 個 SKILL.md"
+            "score": 0,
+            "detail_key": "scan.skills.exists.none",
+            "detail_args": {}
           },
           {
             "dimension": "skills",
-            "label": "description 品質",
+            "label_key": "scan.skills.description",
             "weight": 35,
-            "score": 28,
-            "detail": "description 平均品質佳"
+            "score": 0,
+            "detail_key": "scan.skills.placeholder",
+            "detail_args": {}
           },
           {
             "dimension": "skills",
-            "label": "Progressive disclosure",
+            "label_key": "scan.skills.progressive",
             "weight": 30,
-            "score": 24,
-            "detail": "主檔精簡 + 附屬檔拆分"
+            "score": 0,
+            "detail_key": "scan.skills.placeholder",
+            "detail_args": {}
           },
           {
             "dimension": "skills",
-            "label": "Lint: frontmatter & token 衛生",
+            "label_key": "scan.skills.lint_hygiene",
             "weight": 20,
-            "score": 18,
-            "detail": "frontmatter 合規 6/6"
+            "score": 0,
+            "detail_key": "scan.skills.placeholder",
+            "detail_args": {}
           }
         ],
         "mcp": [
           {
             "dimension": "mcp",
-            "label": "MCP server 數量",
+            "label_key": "scan.mcp.server_count",
             "weight": 50,
-            "score": 50,
-            "detail": "4 個 MCP server"
+            "score": 0,
+            "detail_key": "scan.mcp.server_count.none",
+            "detail_args": {}
           },
           {
             "dimension": "mcp",
-            "label": "MCP 類型廣度",
+            "label_key": "scan.mcp.category_breadth",
             "weight": 50,
-            "score": 51,
-            "detail": "涵蓋類別: data, saas, search"
+            "score": 0,
+            "detail_key": "scan.mcp.category_breadth.none",
+            "detail_args": {}
           }
         ],
         "automation": [
           {
             "dimension": "automation",
-            "label": "Hooks",
+            "label_key": "scan.automation.hooks",
             "weight": 30,
-            "score": 30,
-            "detail": "偵測到 hooks 設定"
+            "score": 0,
+            "detail_key": "scan.automation.hooks.none",
+            "detail_args": {}
           },
           {
             "dimension": "automation",
-            "label": "Subagents",
+            "label_key": "scan.automation.subagents",
             "weight": 30,
-            "score": 30,
-            "detail": "3 個 subagent"
+            "score": 0,
+            "detail_key": "scan.automation.subagents.none",
+            "detail_args": {}
           },
           {
             "dimension": "automation",
-            "label": "自訂 slash commands",
+            "label_key": "scan.automation.commands",
             "weight": 25,
-            "score": 25,
-            "detail": "5 個自訂命令"
+            "score": 0,
+            "detail_key": "scan.automation.commands.none",
+            "detail_args": {}
           },
           {
             "dimension": "automation",
-            "label": "Plugins",
+            "label_key": "scan.automation.plugins",
             "weight": 15,
-            "score": 15,
-            "detail": "偵測到 plugin 使用"
+            "score": 0,
+            "detail_key": "scan.automation.plugins.none",
+            "detail_args": {}
           }
         ],
         "context_hygiene": [
           {
             "dimension": "context_hygiene",
-            "label": "User/Project 分工",
+            "label_key": "scan.context.split",
             "weight": 40,
             "score": 40,
-            "detail": "同時具備 project 與 user-space 設定"
+            "detail_key": "scan.context.split.full",
+            "detail_args": {}
           },
           {
             "dimension": "context_hygiene",
-            "label": "共享/個人設定區分",
+            "label_key": "scan.context.shared_personal",
             "weight": 30,
             "score": 30,
-            "detail": "settings.local.json 已 gitignore"
+            "detail_key": "scan.context.shared_personal.ok",
+            "detail_args": {}
           },
           {
             "dimension": "context_hygiene",
-            "label": "模組化引用",
+            "label_key": "scan.context.modular",
             "weight": 30,
-            "score": 30,
-            "detail": "2 處模組化引用"
+            "score": 0,
+            "detail_key": "scan.context.modular.none",
+            "detail_args": {}
           }
         ],
         "iteration": [
           {
             "dimension": "iteration",
-            "label": "設定檔 git 迭代",
+            "label_key": "scan.iteration.git",
             "weight": 60,
-            "score": 48,
-            "detail": "設定相關 commit 6 次"
+            "score": 8,
+            "detail_key": "scan.iteration.git.detail",
+            "detail_args": {
+              "parts": "CLAUDE.md=1",
+              "counts": {
+                "CLAUDE.md": 1,
+                ".claude/": 0,
+                ".mcp.json": 0
+              }
+            }
           },
           {
             "dimension": "iteration",
-            "label": "設定檔多樣性",
+            "label_key": "scan.iteration.diversity",
             "weight": 40,
-            "score": 28,
-            "detail": "曾迭代 2 類設定檔"
+            "score": 14,
+            "detail_key": "scan.iteration.diversity.detail",
+            "detail_args": {
+              "n": 1
+            }
           }
         ]
       },
       "usage_findings_by_dim": {
         "claude_md": [
           {
-            "label": "tool_decision 接受率 (間接)",
+            "label_key": "usage.claude_md.accept_rate",
             "weight": 100,
             "score": 80.0,
-            "detail": "8/10 工具提議被接受 (reject_ratio=20.0%)"
+            "detail_key": "usage.claude_md.accept_rate.detail",
+            "detail_args": {
+              "a": 8,
+              "t": 10,
+              "pct": 20.0
+            }
           }
         ],
         "skills": [
           {
-            "label": "Skill 觸發次數",
+            "label_key": "usage.skills.trigger_count",
             "weight": 40,
             "score": 40.0,
-            "detail": "4 次觸發 / 2 session (activation_rate=1.00)"
+            "detail_key": "usage.skills.trigger_count.detail",
+            "detail_args": {
+              "total": 4,
+              "sessions": 2,
+              "rate": 1.0
+            }
           },
           {
-            "label": "proactive 觸發比例",
+            "label_key": "usage.skills.proactive",
             "weight": 40,
             "score": 20.0,
-            "detail": "2/4 為模型主動觸發 (50%) — 反映 description 觸發力"
+            "detail_key": "usage.skills.proactive.detail",
+            "detail_args": {
+              "p": 2,
+              "t": 4,
+              "pct": 50.0
+            }
           },
           {
-            "label": "至少用過 1 個 skill",
+            "label_key": "usage.skills.at_least_one",
             "weight": 20,
             "score": 20.0,
-            "detail": "2 個 skill 被觸發過"
+            "detail_key": "usage.skills.at_least_one.detail",
+            "detail_args": {
+              "n": 2
+            }
           }
         ],
         "mcp": [
           {
-            "label": "連線健康度",
+            "label_key": "usage.mcp.health",
             "weight": 50,
             "score": 37.5,
-            "detail": "connected=3, failed=1 (health=75%)"
+            "detail_key": "usage.mcp.health.detail",
+            "detail_args": {
+              "c": 3,
+              "f": 1,
+              "pct": 75.0
+            }
           },
           {
-            "label": "被工具呼叫的 server 比例",
+            "label_key": "usage.mcp.used_ratio",
             "weight": 50,
-            "score": 12.5,
-            "detail": "1/4 server 曾被呼叫 (configured 由 scan.json 提供)"
+            "score": 16.7,
+            "detail_key": "usage.mcp.used_ratio.detail",
+            "detail_args": {
+              "invoked": 1,
+              "configured": 3,
+              "_suffixes": []
+            }
           }
         ],
         "automation": [
           {
-            "label": "Hook 觸發率",
+            "label_key": "usage.automation.hook_rate",
             "weight": 40,
             "score": 40.0,
-            "detail": "3/1 已執行的 hook (100%)"
+            "detail_key": "usage.automation.hook_rate.detail",
+            "detail_args": {
+              "e": 3,
+              "r": 3,
+              "pct": 100.0
+            }
           },
           {
-            "label": "Plugin 載入比例",
+            "label_key": "usage.automation.plugin_ratio",
             "weight": 35,
             "score": 35.0,
-            "detail": "2/1 plugin 載入 (100%)"
+            "detail_key": "usage.automation.plugin_ratio.detail",
+            "detail_args": {
+              "loaded": 2,
+              "installed": 2,
+              "pct": 100.0
+            }
           },
           {
-            "label": "Subagent 使用",
+            "label_key": "usage.automation.subagent",
             "weight": 25,
             "score": 25.0,
-            "detail": "2 種 subagent 被派遣"
+            "detail_key": "usage.automation.subagent.have",
+            "detail_args": {
+              "n": 2
+            }
           }
         ],
         "context_hygiene": [
           {
-            "label": "@ 引用頻率 (per session)",
+            "label_key": "usage.context.mention_rate",
             "weight": 60,
             "score": 60.0,
-            "detail": "4 次 @file 引用 / 2 session (rate=1.00)"
+            "detail_key": "usage.context.mention_rate.detail",
+            "detail_args": {
+              "count": 4,
+              "sessions": 2,
+              "rate": 1.0
+            }
           },
           {
-            "label": "@ 解析成功率",
+            "label_key": "usage.context.mention_success",
             "weight": 40,
             "score": 32.0,
-            "detail": "4/5 解析成功"
+            "detail_key": "usage.context.mention_success.detail",
+            "detail_args": {
+              "ok": 4,
+              "total": 5
+            }
           }
         ],
         "iteration": []
       },
-      "top_gaps": [
-        {
-          "dimension": "mcp",
-          "gap": 50.0,
-          "config": 100.0,
-          "usage": 50.0,
-          "hint": "`agent-radar`：你設定了 MCP server，但實際被呼叫的比例偏低。檢查哪些 server 從未被使用，刪除或重新評估。"
-        },
-        {
-          "dimension": "claude_md",
-          "gap": 11.4,
-          "config": 91.4,
-          "usage": 80.0,
-          "hint": "`agent-radar`：CLAUDE.md 寫得齊全，但 tool_decision 顯示提議常被拒。回頭看哪些建議被拒，把規則明文寫進 CLAUDE.md。"
-        }
-      ],
+      "top_gaps": [],
       "totals": {
         "session_count": 2,
         "active_seconds": 5400.0,
@@ -344,6 +405,267 @@
         "tool_rejects": 2
       },
       "blind_spots": [],
+      "notes": []
+    },
+    {
+      "name": "~ (user-space)",
+      "path": "C:\\Users\\millerlai",
+      "level_threshold": 20,
+      "config_overall": 32.5,
+      "usage_overall": null,
+      "scores": {
+        "claude_md": {
+          "config": 85.5,
+          "usage": null,
+          "gap": null
+        },
+        "skills": {
+          "config": 54.5,
+          "usage": null,
+          "gap": null
+        },
+        "mcp": {
+          "config": 0.0,
+          "usage": null,
+          "gap": null
+        },
+        "automation": {
+          "config": 15.0,
+          "usage": null,
+          "gap": null
+        },
+        "context_hygiene": {
+          "config": 40.0,
+          "usage": null,
+          "gap": null
+        },
+        "iteration": {
+          "config": 0.0,
+          "usage": null,
+          "gap": null
+        }
+      },
+      "config_findings_by_dim": {
+        "claude_md": [
+          {
+            "dimension": "claude_md",
+            "label_key": "scan.claude_md.exists",
+            "weight": 25,
+            "score": 25,
+            "detail_key": "scan.claude_md.exists.found",
+            "detail_args": {
+              "paths": ".claude\\CLAUDE.md"
+            }
+          },
+          {
+            "dimension": "claude_md",
+            "label_key": "scan.claude_md.structure",
+            "weight": 20,
+            "score": 20,
+            "detail_key": "scan.claude_md.structure.detail",
+            "detail_args": {
+              "headers": 7,
+              "hints": 6
+            }
+          },
+          {
+            "dimension": "claude_md",
+            "label_key": "scan.claude_md.imperative",
+            "weight": 15,
+            "score": 10.5,
+            "detail_key": "scan.claude_md.imperative.detail",
+            "detail_args": {
+              "hits": 7
+            }
+          },
+          {
+            "dimension": "claude_md",
+            "label_key": "scan.claude_md.concise",
+            "weight": 15,
+            "score": 15,
+            "detail_key": "scan.claude_md.concise.detail",
+            "detail_args": {
+              "words": 212
+            }
+          },
+          {
+            "dimension": "claude_md",
+            "label_key": "scan.claude_md.import",
+            "weight": 10,
+            "score": 0,
+            "detail_key": "scan.claude_md.import.none",
+            "detail_args": {}
+          },
+          {
+            "dimension": "claude_md",
+            "label_key": "scan.claude_md.lint_size",
+            "weight": 15,
+            "score": 15,
+            "detail_key": "scan.claude_md.lint_size.ok",
+            "detail_args": {
+              "chars": 1279
+            }
+          }
+        ],
+        "skills": [
+          {
+            "dimension": "skills",
+            "label_key": "scan.skills.exists",
+            "weight": 35,
+            "score": 35,
+            "detail_key": "scan.skills.exists.have",
+            "detail_args": {
+              "n": 145
+            }
+          },
+          {
+            "dimension": "skills",
+            "label_key": "scan.skills.description",
+            "weight": 35,
+            "score": 0.399999999999999,
+            "detail_key": "scan.skills.description.detail",
+            "detail_args": {}
+          },
+          {
+            "dimension": "skills",
+            "label_key": "scan.skills.progressive",
+            "weight": 30,
+            "score": 30,
+            "detail_key": "scan.skills.progressive.detail",
+            "detail_args": {}
+          },
+          {
+            "dimension": "skills",
+            "label_key": "scan.skills.lint_hygiene",
+            "weight": 20,
+            "score": 0,
+            "detail_key": "scan.skills.lint.detail",
+            "detail_args": {
+              "fm": 145,
+              "n": 145,
+              "_suffixes": [
+                [
+                  "scan.skills.lint.decor_suffix",
+                  {
+                    "n": 82
+                  }
+                ],
+                [
+                  "scan.skills.lint.oversize_suffix",
+                  {
+                    "n": 114.0
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "mcp": [
+          {
+            "dimension": "mcp",
+            "label_key": "scan.mcp.server_count",
+            "weight": 50,
+            "score": 0,
+            "detail_key": "scan.mcp.server_count.none",
+            "detail_args": {}
+          },
+          {
+            "dimension": "mcp",
+            "label_key": "scan.mcp.category_breadth",
+            "weight": 50,
+            "score": 0,
+            "detail_key": "scan.mcp.category_breadth.none",
+            "detail_args": {}
+          }
+        ],
+        "automation": [
+          {
+            "dimension": "automation",
+            "label_key": "scan.automation.hooks",
+            "weight": 30,
+            "score": 0,
+            "detail_key": "scan.automation.hooks.none",
+            "detail_args": {}
+          },
+          {
+            "dimension": "automation",
+            "label_key": "scan.automation.subagents",
+            "weight": 30,
+            "score": 0,
+            "detail_key": "scan.automation.subagents.none",
+            "detail_args": {}
+          },
+          {
+            "dimension": "automation",
+            "label_key": "scan.automation.commands",
+            "weight": 25,
+            "score": 0,
+            "detail_key": "scan.automation.commands.none",
+            "detail_args": {}
+          },
+          {
+            "dimension": "automation",
+            "label_key": "scan.automation.plugins",
+            "weight": 15,
+            "score": 15,
+            "detail_key": "scan.automation.plugins.have",
+            "detail_args": {}
+          }
+        ],
+        "context_hygiene": [
+          {
+            "dimension": "context_hygiene",
+            "label_key": "scan.context.split",
+            "weight": 40,
+            "score": 40,
+            "detail_key": "scan.context.split.full",
+            "detail_args": {}
+          },
+          {
+            "dimension": "context_hygiene",
+            "label_key": "scan.context.shared_personal",
+            "weight": 30,
+            "score": 0,
+            "detail_key": "scan.context.shared_personal.no",
+            "detail_args": {}
+          },
+          {
+            "dimension": "context_hygiene",
+            "label_key": "scan.context.modular",
+            "weight": 30,
+            "score": 0,
+            "detail_key": "scan.context.modular.none",
+            "detail_args": {}
+          }
+        ],
+        "iteration": [
+          {
+            "dimension": "iteration",
+            "label_key": "scan.iteration.git",
+            "weight": 60,
+            "score": 0,
+            "detail_key": "scan.iteration.non_git",
+            "detail_args": {}
+          },
+          {
+            "dimension": "iteration",
+            "label_key": "scan.iteration.diversity",
+            "weight": 40,
+            "score": 0,
+            "detail_key": "scan.iteration.non_git.short",
+            "detail_args": {}
+          }
+        ]
+      },
+      "usage_findings_by_dim": {},
+      "top_gaps": [],
+      "totals": {},
+      "blind_spots": [
+        {
+          "key": "scan.blind.config_only",
+          "args": {}
+        }
+      ],
       "notes": []
     }
   ]

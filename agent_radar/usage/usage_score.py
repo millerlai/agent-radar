@@ -5,6 +5,9 @@ the merge step can stack config vs usage on the same radar axes.
 
 `iteration` has no usage signal — it is intentionally returned as None, and the
 report renders it as N/A with a dashed line.
+
+Findings carry ``label_key`` / ``detail_key`` + ``detail_args`` (i18n-ready);
+``agent_radar.report`` resolves them via ``agent_radar.i18n`` per ``--lang``.
 """
 
 from __future__ import annotations
@@ -13,15 +16,10 @@ from __future__ import annotations
 from .collectors.base import UsageWindow
 
 
-# Keep in sync with scanner.DIMENSIONS keys.
-USAGE_DIMENSIONS = {
-    "claude_md": "CLAUDE.md 生效度 (間接)",
-    "skills": "Skills 運用",
-    "mcp": "MCP 運用",
-    "automation": "自動化運用",
-    "context_hygiene": "情境引用",
-    "iteration": "迭代與維護",
-}
+# Keep in sync with scanner.DIMENSION_KEYS.
+USAGE_DIMENSION_KEYS = [
+    "claude_md", "skills", "mcp", "automation", "context_hygiene", "iteration",
+]
 
 
 def _clamp(v: float, lo: float = 0.0, hi: float = 100.0) -> float:
@@ -52,24 +50,27 @@ def _score_skills(w: UsageWindow) -> tuple[float, list[dict]]:
 
     findings = [
         {
-            "label": "Skill 觸發次數",
+            "label_key": "usage.skills.trigger_count",
             "weight": 40,
             "score": round(40 * activation_rate, 1),
-            "detail": f"{total} 次觸發 / {w.session_count} session "
-                      f"(activation_rate={activation_rate:.2f})",
+            "detail_key": "usage.skills.trigger_count.detail",
+            "detail_args": {
+                "total": total, "sessions": w.session_count, "rate": activation_rate,
+            },
         },
         {
-            "label": "proactive 觸發比例",
+            "label_key": "usage.skills.proactive",
             "weight": 40,
             "score": round(40 * proactive_ratio, 1),
-            "detail": f"{proactive}/{total} 為模型主動觸發 "
-                      f"({proactive_ratio*100:.0f}%) — 反映 description 觸發力",
+            "detail_key": "usage.skills.proactive.detail",
+            "detail_args": {"p": proactive, "t": total, "pct": proactive_ratio * 100},
         },
         {
-            "label": "至少用過 1 個 skill",
+            "label_key": "usage.skills.at_least_one",
             "weight": 20,
             "score": round(20 * distinct_bonus, 1),
-            "detail": f"{distinct} 個 skill 被觸發過",
+            "detail_key": "usage.skills.at_least_one.detail",
+            "detail_args": {"n": distinct},
         },
     ]
     return round(score, 1), findings
@@ -80,30 +81,31 @@ def _score_mcp(w: UsageWindow, servers_configured: int | None) -> tuple[float, l
     failed = sum(b["failed"] for b in w.mcp.values())
     health = _safe_div(connected, connected + failed)
 
-    # If scan didn't tell us how many were configured, fall back to the count
-    # of server_names we ever saw a connection event for. That biases toward
-    # 100% when everything connected, which is fine — there's nothing else.
     if servers_configured is None or servers_configured <= 0:
         servers_configured = max(len(w.mcp), 1)
     used_ratio = min(_safe_div(len(w.mcp_invoked), servers_configured), 1.0)
 
     score = _clamp(50 * health + 50 * used_ratio)
+    invoked = len(w.mcp_invoked)
+    has_scan_suffix = invoked == servers_configured or servers_configured > len(w.mcp)
+    suffixes = ([["usage.mcp.used_ratio.suffix_scan", {}]] if has_scan_suffix else [])
     findings = [
         {
-            "label": "連線健康度",
+            "label_key": "usage.mcp.health",
             "weight": 50,
             "score": round(50 * health, 1),
-            "detail": f"connected={connected}, failed={failed} "
-                      f"(health={health*100:.0f}%)",
+            "detail_key": "usage.mcp.health.detail",
+            "detail_args": {"c": connected, "f": failed, "pct": health * 100},
         },
         {
-            "label": "被工具呼叫的 server 比例",
+            "label_key": "usage.mcp.used_ratio",
             "weight": 50,
             "score": round(50 * used_ratio, 1),
-            "detail": f"{len(w.mcp_invoked)}/{servers_configured} server 曾被呼叫"
-                      + (" (configured 由 scan.json 提供)"
-                         if servers_configured == len(w.mcp_invoked) or
-                         servers_configured > len(w.mcp) else ""),
+            "detail_key": "usage.mcp.used_ratio.detail",
+            "detail_args": {
+                "invoked": invoked, "configured": servers_configured,
+                "_suffixes": suffixes,
+            },
         },
     ]
     return round(score, 1), findings
@@ -116,8 +118,6 @@ def _score_automation(
 ) -> tuple[float, list[dict]]:
     hooks_registered = sum(b["registered"] for b in w.hooks.values())
     hooks_executed = sum(b["executed"] for b in w.hooks.values())
-    # prefer the static count when present, since some hooks may register
-    # without ever firing during the observation window.
     reg_denom = hooks_registered_static or hooks_registered
     hook_ratio = min(_safe_div(hooks_executed, reg_denom), 1.0) if reg_denom else 0.0
 
@@ -131,26 +131,29 @@ def _score_automation(
     score = _clamp(40 * hook_ratio + 35 * plugin_ratio + 25 * subagent_used)
     findings = [
         {
-            "label": "Hook 觸發率",
+            "label_key": "usage.automation.hook_rate",
             "weight": 40,
             "score": round(40 * hook_ratio, 1),
-            "detail": f"{hooks_executed}/{reg_denom} 已執行的 hook "
-                      f"({hook_ratio*100:.0f}%)" if reg_denom
-                      else "尚無 hook 註冊紀錄",
+            "detail_key": ("usage.automation.hook_rate.detail" if reg_denom
+                           else "usage.automation.hook_rate.empty"),
+            "detail_args": ({"e": hooks_executed, "r": reg_denom,
+                             "pct": hook_ratio * 100} if reg_denom else {}),
         },
         {
-            "label": "Plugin 載入比例",
+            "label_key": "usage.automation.plugin_ratio",
             "weight": 35,
             "score": round(35 * plugin_ratio, 1),
-            "detail": f"{plugins_loaded}/{plugins_installed} plugin 載入"
-                      f" ({plugin_ratio*100:.0f}%)",
+            "detail_key": "usage.automation.plugin_ratio.detail",
+            "detail_args": {"loaded": plugins_loaded, "installed": plugins_installed,
+                            "pct": plugin_ratio * 100},
         },
         {
-            "label": "Subagent 使用",
+            "label_key": "usage.automation.subagent",
             "weight": 25,
             "score": round(25 * subagent_used, 1),
-            "detail": f"{len(w.subagents)} 種 subagent 被派遣" if w.subagents
-                      else "未使用任何 subagent",
+            "detail_key": ("usage.automation.subagent.have" if w.subagents
+                           else "usage.automation.subagent.none"),
+            "detail_args": ({"n": len(w.subagents)} if w.subagents else {}),
         },
     ]
     return round(score, 1), findings
@@ -169,18 +172,21 @@ def _score_context_hygiene(w: UsageWindow) -> tuple[float, list[dict]]:
     score = _clamp(60 * file_mention_rate + 40 * success_rate)
     findings = [
         {
-            "label": "@ 引用頻率 (per session)",
+            "label_key": "usage.context.mention_rate",
             "weight": 60,
             "score": round(60 * file_mention_rate, 1),
-            "detail": f"{file_count} 次 @file 引用 / {w.session_count} session "
-                      f"(rate={file_mention_rate:.2f})",
+            "detail_key": "usage.context.mention_rate.detail",
+            "detail_args": {"count": file_count, "sessions": w.session_count,
+                            "rate": file_mention_rate},
         },
         {
-            "label": "@ 解析成功率",
+            "label_key": "usage.context.mention_success",
             "weight": 40,
             "score": round(40 * success_rate, 1),
-            "detail": f"{total_success}/{total_mentions} 解析成功"
-                      if total_mentions else "尚無 @ 引用紀錄",
+            "detail_key": ("usage.context.mention_success.detail" if total_mentions
+                           else "usage.context.mention_success.empty"),
+            "detail_args": ({"ok": total_success, "total": total_mentions}
+                            if total_mentions else {}),
         },
     ]
     return round(score, 1), findings
@@ -194,12 +200,13 @@ def _score_claude_md_effectiveness(w: UsageWindow) -> tuple[float, list[dict]]:
     score = _clamp(100 * (1 - reject_ratio))
     findings = [
         {
-            "label": "tool_decision 接受率 (間接)",
+            "label_key": "usage.claude_md.accept_rate",
             "weight": 100,
             "score": round(score, 1),
-            "detail": f"{accepts}/{total} 工具提議被接受 "
-                      f"(reject_ratio={reject_ratio*100:.1f}%)"
-                      if total else "尚無 tool_decision 事件",
+            "detail_key": ("usage.claude_md.accept_rate.detail" if total
+                           else "usage.claude_md.accept_rate.empty"),
+            "detail_args": ({"a": accepts, "t": total, "pct": reject_ratio * 100}
+                            if total else {}),
         },
     ]
     return round(score, 1), findings
@@ -215,14 +222,6 @@ def score_window(window: UsageWindow, scan_context: dict | None = None) -> dict:
     `scan_context` is an optional dict carrying counts from the static scan
     (provides the denominators for usage ratios):
         {"servers_configured": int, "hooks_registered": int, "plugins_installed": int}
-
-    Returns:
-        {
-          "scores": {dim: float|None, ...},   # iteration is None
-          "findings_by_dim": {dim: [{label, weight, score, detail}, ...]},
-          "totals": {...},                    # diagnostic counts
-          "notes": [...],
-        }
     """
     ctx = scan_context or {}
     skills_score, skills_f = _score_skills(window)
@@ -238,7 +237,7 @@ def score_window(window: UsageWindow, scan_context: dict | None = None) -> dict:
         "mcp": mcp_score,
         "automation": auto_score,
         "context_hygiene": ctx_score,
-        "iteration": None,  # N/A — no usage-side signal for iteration
+        "iteration": None,
     }
     findings_by_dim = {
         "claude_md": md_f,
@@ -259,7 +258,6 @@ def score_window(window: UsageWindow, scan_context: dict | None = None) -> dict:
         "tool_accepts": window.decisions["accept"],
         "tool_rejects": window.decisions["reject"],
     }
-    # overall ignores None (iteration)
     valid = [s for s in scores.values() if s is not None]
     overall = round(sum(valid) / len(valid), 1) if valid else 0.0
 

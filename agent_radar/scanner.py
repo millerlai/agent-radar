@@ -19,20 +19,11 @@ agent-radar :: agent_radar.scanner
 「配置完整度」與「實際運用度」是兩件事。本工具偵測的是「配置」(靜態)，
 若要量測「運用」需接 OpenTelemetry，scanner 會在報告中標註此落差盲區。
 
-用法
-----
-  # 掃單一目錄 (個人 / 單一 repo)
-  agent-radar scan /path/to/repo
-
-  # 掃多個 repo (團隊 benchmark)
-  agent-radar scan /repos/a /repos/b /repos/c
-
-  # 一併納入 user-space (~/.claude)
-  agent-radar scan --include-home /path/to/repo
-
-輸出
-----
-  stdout 印出 JSON。搭配 ``agent-radar report`` 產生 HTML 雷達圖報告。
+JSON shape
+----------
+Findings carry language-neutral keys (``label_key`` / ``detail_key`` +
+``detail_args``); ``agent-radar report --lang`` renders them via
+``agent_radar.i18n``. Same for ``blind_spots``.
 """
 
 import argparse
@@ -45,25 +36,11 @@ from pathlib import Path
 
 
 # ----------------------------------------------------------------------------
-# 維度定義
+# 維度定義 (keys; labels are resolved at render time via i18n.DIMENSIONS)
 # ----------------------------------------------------------------------------
 
-DIMENSIONS = {
-    "claude_md": "CLAUDE.md 成熟度",
-    "skills": "Skills 運用",
-    "mcp": "MCP 整合",
-    "automation": "自動化",
-    "context_hygiene": "情境衛生",
-    "iteration": "迭代與維護",
-}
-
-# 成熟度層級標籤 (給總分用)
-LEVELS = [
-    (0, "L0 · 未使用 (Unaware)"),
-    (20, "L1 · 萌芽 (Reactive)"),
-    (40, "L2 · 結構化 (Structured)"),
-    (60, "L3 · 進階 (Advanced)"),
-    (80, "L4 · 精煉 (Mastery)"),
+DIMENSION_KEYS = [
+    "claude_md", "skills", "mcp", "automation", "context_hygiene", "iteration",
 ]
 
 
@@ -73,12 +50,13 @@ LEVELS = [
 
 @dataclass
 class Finding:
-    """單一證據訊號。"""
+    """One evidence signal, carrying i18n keys (rendered at report time)."""
     dimension: str
-    label: str
-    weight: float          # 該訊號滿分時對維度貢獻的分數
-    score: float           # 實際得分 (0 ~ weight)
-    detail: str = ""
+    label_key: str
+    weight: float
+    score: float
+    detail_key: str = ""
+    detail_args: dict = field(default_factory=dict)
 
     @property
     def ratio(self) -> float:
@@ -94,8 +72,8 @@ class TargetReport:
     findings: list = field(default_factory=list)
     scores: dict = field(default_factory=dict)   # dimension -> 0..100
     overall: float = 0.0
-    level: str = ""
-    blind_spots: list = field(default_factory=list)
+    level_threshold: int = 0  # threshold (0/20/40/60/80) — label rendered by report
+    blind_spots: list = field(default_factory=list)  # list of {"key": str, "args": dict}
 
 
 # ----------------------------------------------------------------------------
@@ -142,31 +120,26 @@ def _clamp(v: float, lo: float = 0.0, hi: float = None) -> float:
 # 各維度偵測邏輯
 # ----------------------------------------------------------------------------
 
-# 結構化分區的常見標題關鍵字 (中英)
 SECTION_HINTS = [
     "command", "build", "test", "lint", "code style", "convention",
     "architecture", "workflow", "do not", "never", "always", "important",
     "指令", "建置", "測試", "風格", "規範", "架構", "禁止", "務必", "注意",
 ]
 
-# imperative / 指令式語氣的訊號 (寫得好的 CLAUDE.md 多用祈使句)
 IMPERATIVE_HINTS = [
     r"\buse\b", r"\bdo not\b", r"\bnever\b", r"\balways\b", r"\bprefer\b",
     r"\brun\b", r"\bavoid\b", r"\bensure\b", r"請", r"務必", r"禁止", r"避免",
 ]
 
-# Lint 規則參考 (借自 felixgeelhaar/cclint 與 agentskills.io Skill Linter,
-# 不依賴外部工具,純規則重新實作)。
-CLAUDE_MD_SOFT_LIMIT_CHARS = 8_000     # 超過此字元數開始扣分 (cclint 預設約 5–10KB)
-CLAUDE_MD_HARD_LIMIT_CHARS = 20_000    # 超過此字元數為「傾倒場」,大幅扣分
-SKILL_MD_SOFT_LIMIT_LINES = 250        # agentskills.io 建議主檔精簡
+CLAUDE_MD_SOFT_LIMIT_CHARS = 8_000
+CLAUDE_MD_HARD_LIMIT_CHARS = 20_000
+SKILL_MD_SOFT_LIMIT_LINES = 250
 SKILL_MD_HARD_LIMIT_LINES = 500
 
-# ASCII art / 裝飾性內容 → token 浪費
 DECORATIVE_PATTERNS = [
-    r"[=\-_*#~`]{20,}",          # ===== / ----- / ##### 等
-    r"[─━│┃┄┅┆┇┈┉┊┋┌┍┎┏┐┑┒┓└┕┖┗┘┙┚┛├┝┞┟┠┡┢┣┤┥┦┧┨┩┪┫┬┭┮┯┰┱┲┳┴┵┶┷┸┹┺┻┼┽┾┿╀╁╂╃╄╅╆╇╈╉╊╋╌╍╎╏═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬╭╮╯╰╱╲╳╴╵╶╷╸╹╺╻╼╽╾╿]{8,}",  # box-drawing
-    r"^\s*[▀▁▂▃▄▅▆▇█▉▊▋▌▍▎▏▐░▒▓▔▕]{4,}",     # block elements
+    r"[=\-_*#~`]{20,}",
+    r"[─━│┃┄┅┆┇┈┉┊┋┌┍┎┏┐┑┒┓└┕┖┗┘┙┚┛├┝┞┟┠┡┢┣┤┥┦┧┨┩┪┫┬┭┮┯┰┱┲┳┴┵┶┷┸┹┺┻┼┽┾┿╀╁╂╃╄╅╆╇╈╉╊╋╌╍╎╏═║╒╓╔╕╖╗╘╙╚╛╜╝╞╟╠╡╢╣╤╥╦╧╨╩╪╫╬╭╮╯╰╱╲╳╴╵╶╷╸╹╺╻╼╽╾╿]{8,}",
+    r"^\s*[▀▁▂▃▄▅▆▇█▉▊▋▌▍▎▏▐░▒▓▔▕]{4,}",
 ]
 DECORATIVE_RE = re.compile("|".join(DECORATIVE_PATTERNS), re.MULTILINE)
 
@@ -174,90 +147,95 @@ DECORATIVE_RE = re.compile("|".join(DECORATIVE_PATTERNS), re.MULTILINE)
 def detect_claude_md(repo: Path, is_home: bool) -> list:
     """評估 CLAUDE.md 成熟度。"""
     findings = []
-    # project-space 與 user-space 可能的位置
-    candidates = [
-        repo / "CLAUDE.md",
-        repo / ".claude" / "CLAUDE.md",
-    ]
+    candidates = [repo / "CLAUDE.md", repo / ".claude" / "CLAUDE.md"]
     found = [p for p in candidates if _exists(p)]
 
-    # 1. 存在性
-    findings.append(Finding(
-        "claude_md", "CLAUDE.md 存在", weight=25,
-        score=25 if found else 0,
-        detail=("找到 " + ", ".join(str(p.relative_to(repo)) for p in found)) if found
-        else "未發現 CLAUDE.md",
-    ))
-
-    if not found:
+    if found:
+        paths_str = ", ".join(str(p.relative_to(repo)) for p in found)
+        findings.append(Finding(
+            "claude_md", "scan.claude_md.exists", weight=25, score=25,
+            detail_key="scan.claude_md.exists.found",
+            detail_args={"paths": paths_str},
+        ))
+    else:
+        findings.append(Finding(
+            "claude_md", "scan.claude_md.exists", weight=25, score=0,
+            detail_key="scan.claude_md.exists.none",
+        ))
         # 後面的訊號都 0 分，但仍列出讓報告完整
-        for lbl, w in [("結構化分區", 20), ("指令式語氣", 15),
-                       ("精簡度 (非散文堆疊)", 15), ("@import 引用", 10)]:
-            findings.append(Finding("claude_md", lbl, weight=w, score=0,
-                                    detail="無 CLAUDE.md 可評估"))
+        for lbl_key, w in [
+            ("scan.claude_md.structure", 20),
+            ("scan.claude_md.imperative", 15),
+            ("scan.claude_md.concise", 15),
+            ("scan.claude_md.import", 10),
+        ]:
+            findings.append(Finding(
+                "claude_md", lbl_key, weight=w, score=0,
+                detail_key="scan.claude_md.placeholder",
+            ))
         return findings
 
     text = "\n\n".join(_read(p) for p in found)
     lower = text.lower()
 
-    # 2. 結構化分區：看 markdown 標題數 + 是否命中分區關鍵字
     headers = re.findall(r"^#{1,4}\s+.+$", text, flags=re.MULTILINE)
     hint_hits = sum(1 for h in SECTION_HINTS if h in lower)
     struct_score = _clamp(len(headers) * 4 + hint_hits * 2, 0, 20)
     findings.append(Finding(
-        "claude_md", "結構化分區", weight=20, score=struct_score,
-        detail=f"{len(headers)} 個標題, 命中 {hint_hits} 個分區關鍵字",
+        "claude_md", "scan.claude_md.structure", weight=20, score=struct_score,
+        detail_key="scan.claude_md.structure.detail",
+        detail_args={"headers": len(headers), "hints": hint_hits},
     ))
 
-    # 3. 指令式語氣
     imp_hits = sum(len(re.findall(p, lower)) for p in IMPERATIVE_HINTS)
     imp_score = _clamp(imp_hits * 1.5, 0, 15)
     findings.append(Finding(
-        "claude_md", "指令式語氣", weight=15, score=imp_score,
-        detail=f"偵測到約 {imp_hits} 處祈使/規範語句",
+        "claude_md", "scan.claude_md.imperative", weight=15, score=imp_score,
+        detail_key="scan.claude_md.imperative.detail",
+        detail_args={"hits": imp_hits},
     ))
 
-    # 4. 精簡度：好的 CLAUDE.md 精簡且高密度。過長散文扣分。
     words = len(text.split())
     if words == 0:
         concise = 0
     elif words < 80:
-        concise = 7          # 太短也不夠 (可能只是佔位)
+        concise = 7
     elif words <= 600:
-        concise = 15         # 黃金區間
+        concise = 15
     elif words <= 1200:
         concise = 10
     else:
-        concise = 5          # 過長，多半是想到什麼塞什麼
+        concise = 5
     findings.append(Finding(
-        "claude_md", "精簡度 (非散文堆疊)", weight=15, score=concise,
-        detail=f"約 {words} 字",
+        "claude_md", "scan.claude_md.concise", weight=15, score=concise,
+        detail_key="scan.claude_md.concise.detail",
+        detail_args={"words": words},
     ))
 
-    # 5. @import 引用 (懂得拆檔、保持主檔精簡)
     imports = len(re.findall(r"(^|\s)@[\w./\-]+", text))
     imp_ref_score = _clamp(imports * 5, 0, 10)
     findings.append(Finding(
-        "claude_md", "@import 引用", weight=10, score=imp_ref_score,
-        detail=f"{imports} 處 @ 引用" if imports else "未使用 @import 拆檔",
+        "claude_md", "scan.claude_md.import", weight=10, score=imp_ref_score,
+        detail_key=("scan.claude_md.import.have" if imports
+                    else "scan.claude_md.import.none"),
+        detail_args=({"n": imports} if imports else {}),
     ))
 
-    # 6. Lint: 大小合理 (借自 cclint 的 CLAUDE.md size check)
     total_chars = len(text)
     if total_chars <= CLAUDE_MD_SOFT_LIMIT_CHARS:
         size_score = 15
-        size_detail = f"{total_chars} chars (合規)"
+        detail_key = "scan.claude_md.lint_size.ok"
     elif total_chars <= CLAUDE_MD_HARD_LIMIT_CHARS:
         ratio = (CLAUDE_MD_HARD_LIMIT_CHARS - total_chars) / (
             CLAUDE_MD_HARD_LIMIT_CHARS - CLAUDE_MD_SOFT_LIMIT_CHARS)
         size_score = round(15 * max(ratio, 0) * 0.5 + 4, 1)
-        size_detail = f"{total_chars} chars (偏大,建議拆檔或精簡)"
+        detail_key = "scan.claude_md.lint_size.soft"
     else:
         size_score = 0
-        size_detail = f"{total_chars} chars (過大,違反 cclint 建議,context 浪費)"
+        detail_key = "scan.claude_md.lint_size.hard"
     findings.append(Finding(
-        "claude_md", "Lint: 大小合理", weight=15, score=size_score,
-        detail=size_detail,
+        "claude_md", "scan.claude_md.lint_size", weight=15, score=size_score,
+        detail_key=detail_key, detail_args={"chars": total_chars},
     ))
 
     return findings
@@ -271,36 +249,41 @@ def detect_skills(repo: Path, is_home: bool) -> list:
         if _exists(d):
             skill_files.extend(d.rglob("SKILL.md"))
 
-    findings.append(Finding(
-        "skills", "Skills 存在", weight=35,
-        score=35 if skill_files else 0,
-        detail=f"找到 {len(skill_files)} 個 SKILL.md" if skill_files else "未使用 skills",
-    ))
-
-    if not skill_files:
-        for lbl, w in [("description 品質", 35), ("Progressive disclosure", 30),
-                       ("Lint: frontmatter & token 衛生", 20)]:
-            findings.append(Finding("skills", lbl, weight=w, score=0,
-                                    detail="無 skills 可評估"))
+    if skill_files:
+        findings.append(Finding(
+            "skills", "scan.skills.exists", weight=35, score=35,
+            detail_key="scan.skills.exists.have",
+            detail_args={"n": len(skill_files)},
+        ))
+    else:
+        findings.append(Finding(
+            "skills", "scan.skills.exists", weight=35, score=0,
+            detail_key="scan.skills.exists.none",
+        ))
+        for lbl_key, w in [
+            ("scan.skills.description", 35),
+            ("scan.skills.progressive", 30),
+            ("scan.skills.lint_hygiene", 20),
+        ]:
+            findings.append(Finding(
+                "skills", lbl_key, weight=w, score=0,
+                detail_key="scan.skills.placeholder",
+            ))
         return findings
 
-    # description 品質：YAML frontmatter 是否有夠具體的 description
     desc_quality = 0.0
     pd_quality = 0.0
-    # Lint 統計
-    frontmatter_ok = 0     # 有完整 name + description 的數量
-    decor_violations = 0   # ASCII art / 裝飾性內容違規數量
-    oversize_violations = 0  # SKILL.md 過大
+    frontmatter_ok = 0
+    decor_violations = 0
+    oversize_violations = 0
     for sf in skill_files:
         t = _read(sf)
         m = re.search(r"description:\s*(.+)", t)
         if m:
             desc_len = len(m.group(1).split())
-            # 好的 description 描述「何時觸發」，通常較長且含 trigger 字眼
             trigger = any(k in m.group(1).lower()
                           for k in ["use this", "use when", "trigger", "when the user"])
             desc_quality += min(15, desc_len * 0.4) + (10 if trigger else 0)
-        # progressive disclosure：主檔精簡 + 旁邊有附屬檔
         sibling = list(sf.parent.glob("*"))
         body_words = len(t.split())
         if body_words and body_words < 500 and len(sibling) > 1:
@@ -308,20 +291,17 @@ def detect_skills(repo: Path, is_home: bool) -> list:
         elif len(sibling) > 1:
             pd_quality += 8
 
-        # Lint: frontmatter 完整性 (借自 agentskills.io Skill Linter)
         has_name = bool(re.search(r"^name:\s*\S", t, re.MULTILINE))
         has_desc = bool(m and m.group(1).strip())
         if has_name and has_desc:
             frontmatter_ok += 1
 
-        # Lint: SKILL.md 行數過大 → 違反 progressive disclosure 原則
         n_lines = t.count("\n") + 1
         if n_lines > SKILL_MD_HARD_LIMIT_LINES:
             oversize_violations += 1
         elif n_lines > SKILL_MD_SOFT_LIMIT_LINES:
-            oversize_violations += 0.5  # 半個違規
+            oversize_violations += 0.5
 
-        # Lint: ASCII art / 裝飾性 banner → token 浪費
         if DECORATIVE_RE.search(t):
             decor_violations += 1
 
@@ -329,34 +309,32 @@ def detect_skills(repo: Path, is_home: bool) -> list:
     pd_score = _clamp(pd_quality, 0, 30)
 
     findings.append(Finding(
-        "skills", "description 品質", weight=35, score=desc_score,
-        detail="description 平均品質 (含觸發描述)",
+        "skills", "scan.skills.description", weight=35, score=desc_score,
+        detail_key="scan.skills.description.detail",
     ))
     findings.append(Finding(
-        "skills", "Progressive disclosure", weight=30, score=pd_score,
-        detail="主檔精簡 + 附屬檔拆分情況",
+        "skills", "scan.skills.progressive", weight=30, score=pd_score,
+        detail_key="scan.skills.progressive.detail",
     ))
 
-    # Lint 綜合分數 (滿分 20)
     n = len(skill_files)
     fm_ratio = frontmatter_ok / n
     lint_score = 20 * fm_ratio
-    # 扣分: 每個違規扣 3 分
     lint_score -= min(lint_score, decor_violations * 3 + oversize_violations * 4)
     lint_score = max(0, lint_score)
-    detail_parts = [f"frontmatter 合規 {frontmatter_ok}/{n}"]
+    suffixes = []
     if decor_violations:
-        detail_parts.append(f"{decor_violations} 處 ASCII art/裝飾性內容")
+        suffixes.append(["scan.skills.lint.decor_suffix", {"n": decor_violations}])
     if oversize_violations:
-        detail_parts.append(f"行數超標 {oversize_violations}")
+        suffixes.append(["scan.skills.lint.oversize_suffix", {"n": oversize_violations}])
     findings.append(Finding(
-        "skills", "Lint: frontmatter & token 衛生", weight=20, score=lint_score,
-        detail=", ".join(detail_parts),
+        "skills", "scan.skills.lint_hygiene", weight=20, score=lint_score,
+        detail_key="scan.skills.lint.detail",
+        detail_args={"fm": frontmatter_ok, "n": n, "_suffixes": suffixes},
     ))
     return findings
 
 
-# MCP server 大致分類，用來判斷「廣度」
 MCP_CATEGORY_HINTS = {
     "data": ["postgres", "mysql", "sqlite", "mongo", "bigquery", "snowflake"],
     "saas": ["asana", "linear", "jira", "notion", "slack", "github", "gitlab", "sentry"],
@@ -387,18 +365,21 @@ def detect_mcp(repo: Path, is_home: bool) -> list:
 
     n = len(servers)
     findings.append(Finding(
-        "mcp", "MCP server 數量", weight=50,
+        "mcp", "scan.mcp.server_count", weight=50,
         score=_clamp(n * 18, 0, 50),
-        detail=f"{n} 個 MCP server" if n else "未設定任何 MCP server",
+        detail_key=("scan.mcp.server_count.have" if n
+                    else "scan.mcp.server_count.none"),
+        detail_args=({"n": n} if n else {}),
     ))
 
-    # 廣度：跨越幾種類別
     blob = " ".join(servers.keys()).lower() + " " + json.dumps(servers).lower()
     cats = [c for c, kw in MCP_CATEGORY_HINTS.items() if any(k in blob for k in kw)]
     findings.append(Finding(
-        "mcp", "MCP 類型廣度", weight=50,
+        "mcp", "scan.mcp.category_breadth", weight=50,
         score=_clamp(len(cats) * 17, 0, 50),
-        detail=("涵蓋類別: " + ", ".join(cats)) if cats else "無法辨識類別",
+        detail_key=("scan.mcp.category_breadth.have" if cats
+                    else "scan.mcp.category_breadth.none"),
+        detail_args=({"cats": ", ".join(cats)} if cats else {}),
     ))
     return findings
 
@@ -407,7 +388,6 @@ def detect_automation(repo: Path, is_home: bool) -> list:
     findings = []
     cc = repo / ".claude"
 
-    # hooks
     hooks_present = False
     settings_invalid = False
     settings = cc / "settings.json"
@@ -419,40 +399,48 @@ def detect_automation(repo: Path, is_home: bool) -> list:
     hooks_dir = cc / "hooks"
     if _exists(hooks_dir) and any(hooks_dir.iterdir()):
         hooks_present = True
-    detail = "偵測到 hooks 設定" if hooks_present else "未使用 hooks"
+
     if settings_invalid:
-        detail = "Lint: .claude/settings.json 解析失敗 (JSON 格式錯誤)"
+        detail_key = "scan.automation.hooks.invalid"
+        score = 0
+    elif hooks_present:
+        detail_key = "scan.automation.hooks.have"
+        score = 30
+    else:
+        detail_key = "scan.automation.hooks.none"
+        score = 0
     findings.append(Finding(
-        "automation", "Hooks", weight=30,
-        score=0 if settings_invalid else (30 if hooks_present else 0),
-        detail=detail,
+        "automation", "scan.automation.hooks", weight=30, score=score,
+        detail_key=detail_key,
     ))
 
-    # subagents
     agents_dir = cc / "agents"
     n_agents = len(list(agents_dir.glob("*.md"))) if _exists(agents_dir) else 0
     findings.append(Finding(
-        "automation", "Subagents", weight=30,
+        "automation", "scan.automation.subagents", weight=30,
         score=_clamp(n_agents * 15, 0, 30),
-        detail=f"{n_agents} 個 subagent" if n_agents else "未定義 subagents",
+        detail_key=("scan.automation.subagents.have" if n_agents
+                    else "scan.automation.subagents.none"),
+        detail_args=({"n": n_agents} if n_agents else {}),
     ))
 
-    # 自訂 slash commands
     cmd_dir = cc / "commands"
     n_cmd = len(list(cmd_dir.glob("*.md"))) if _exists(cmd_dir) else 0
     findings.append(Finding(
-        "automation", "自訂 slash commands", weight=25,
+        "automation", "scan.automation.commands", weight=25,
         score=_clamp(n_cmd * 9, 0, 25),
-        detail=f"{n_cmd} 個自訂命令" if n_cmd else "未建立自訂命令",
+        detail_key=("scan.automation.commands.have" if n_cmd
+                    else "scan.automation.commands.none"),
+        detail_args=({"n": n_cmd} if n_cmd else {}),
     ))
 
-    # plugins (marketplace)
     plugin_signal = _exists(cc / "plugins") or (
         _exists(settings) and "plugin" in _read(settings).lower())
     findings.append(Finding(
-        "automation", "Plugins", weight=15,
+        "automation", "scan.automation.plugins", weight=15,
         score=15 if plugin_signal else 0,
-        detail="偵測到 plugin 使用" if plugin_signal else "未使用 plugins",
+        detail_key=("scan.automation.plugins.have" if plugin_signal
+                    else "scan.automation.plugins.none"),
     ))
     return findings
 
@@ -460,45 +448,44 @@ def detect_automation(repo: Path, is_home: bool) -> list:
 def detect_context_hygiene(repo: Path, is_home: bool, home_seen: bool) -> list:
     findings = []
 
-    # user-space vs project-space 分工
     proj_md = _exists(repo / "CLAUDE.md") or _exists(repo / ".claude" / "CLAUDE.md")
-    split_score = 0
     if proj_md and home_seen:
         split_score = 40
-        detail = "同時具備 project 與 user-space 設定 (分工良好)"
+        detail_key = "scan.context.split.full"
     elif proj_md:
         split_score = 20
-        detail = "僅 project-space 設定 (建議補 ~/.claude 放個人通用偏好)"
+        detail_key = "scan.context.split.project_only"
     elif home_seen:
         split_score = 20
-        detail = "僅 user-space 設定"
+        detail_key = "scan.context.split.user_only"
     else:
-        detail = "無分工"
+        split_score = 0
+        detail_key = "scan.context.split.none"
     findings.append(Finding(
-        "context_hygiene", "User/Project 分工", weight=40,
-        score=split_score, detail=detail,
+        "context_hygiene", "scan.context.split", weight=40,
+        score=split_score, detail_key=detail_key,
     ))
 
-    # .gitignore 是否處理了 .claude/settings.local.json (代表懂得區分共享 vs 個人設定)
     gi = _read(repo / ".gitignore").lower()
     gi_score = 30 if ("settings.local" in gi or ".claude/settings.local" in gi) else 0
     findings.append(Finding(
-        "context_hygiene", "共享/個人設定區分", weight=30,
+        "context_hygiene", "scan.context.shared_personal", weight=30,
         score=gi_score,
-        detail="settings.local.json 已 gitignore" if gi_score else
-               "未區分共享與個人設定",
+        detail_key=("scan.context.shared_personal.ok" if gi_score
+                    else "scan.context.shared_personal.no"),
     ))
 
-    # 是否用 @import / 拆檔避免巨型單檔
     md_text = ""
     for p in [repo / "CLAUDE.md", repo / ".claude" / "CLAUDE.md"]:
         if _exists(p):
             md_text += _read(p)
     imports = len(re.findall(r"(^|\s)@[\w./\-]+", md_text))
     findings.append(Finding(
-        "context_hygiene", "模組化引用", weight=30,
+        "context_hygiene", "scan.context.modular", weight=30,
         score=_clamp(imports * 15, 0, 30),
-        detail=f"{imports} 處模組化引用" if imports else "未模組化拆檔",
+        detail_key=("scan.context.modular.have" if imports
+                    else "scan.context.modular.none"),
+        detail_args=({"n": imports} if imports else {}),
     ))
     return findings
 
@@ -509,16 +496,15 @@ def detect_iteration(repo: Path, is_home: bool) -> list:
 
     if not is_git:
         findings.append(Finding(
-            "iteration", "設定檔 git 迭代", weight=60, score=0,
-            detail="非 git repo，無法評估迭代",
+            "iteration", "scan.iteration.git", weight=60, score=0,
+            detail_key="scan.iteration.non_git",
         ))
         findings.append(Finding(
-            "iteration", "設定檔多樣性", weight=40, score=0,
-            detail="非 git repo",
+            "iteration", "scan.iteration.diversity", weight=40, score=0,
+            detail_key="scan.iteration.non_git.short",
         ))
         return findings
 
-    # CLAUDE.md / skills / settings 的 commit 次數 → 反映踩坑後是否回頭調整
     counts = {
         "CLAUDE.md": _git_log_count(repo, "CLAUDE.md")
                      + _git_log_count(repo, ".claude/CLAUDE.md"),
@@ -526,19 +512,20 @@ def detect_iteration(repo: Path, is_home: bool) -> list:
         ".mcp.json": _git_log_count(repo, ".mcp.json"),
     }
     total_commits = sum(counts.values())
+    parts = ", ".join(f"{k}={v}" for k, v in counts.items() if v)
     findings.append(Finding(
-        "iteration", "設定檔 git 迭代", weight=60,
+        "iteration", "scan.iteration.git", weight=60,
         score=_clamp(total_commits * 8, 0, 60),
-        detail="設定相關 commit 次數: " +
-               ", ".join(f"{k}={v}" for k, v in counts.items() if v),
+        detail_key="scan.iteration.git.detail",
+        detail_args={"parts": parts, "counts": counts},
     ))
 
-    # 設定檔多樣性：同時動到多種設定 = 全方位掌握
     touched = sum(1 for v in counts.values() if v > 0)
     findings.append(Finding(
-        "iteration", "設定檔多樣性", weight=40,
+        "iteration", "scan.iteration.diversity", weight=40,
         score=_clamp(touched * 14, 0, 40),
-        detail=f"曾迭代 {touched} 類設定檔",
+        detail_key="scan.iteration.diversity.detail",
+        detail_args={"n": touched},
     ))
     return findings
 
@@ -546,6 +533,9 @@ def detect_iteration(repo: Path, is_home: bool) -> list:
 # ----------------------------------------------------------------------------
 # 彙整
 # ----------------------------------------------------------------------------
+
+LEVEL_THRESHOLDS = [0, 20, 40, 60, 80]
+
 
 def score_target(path: Path, name: str, is_home: bool, home_seen: bool) -> TargetReport:
     rep = TargetReport(name=name, path=str(path), is_home=is_home)
@@ -557,8 +547,7 @@ def score_target(path: Path, name: str, is_home: bool, home_seen: bool) -> Targe
     rep.findings += detect_context_hygiene(path, is_home, home_seen)
     rep.findings += detect_iteration(path, is_home)
 
-    # 各維度加總
-    for dim in DIMENSIONS:
+    for dim in DIMENSION_KEYS:
         fs = [f for f in rep.findings if f.dimension == dim]
         got = sum(f.score for f in fs)
         cap = sum(f.weight for f in fs)
@@ -566,19 +555,15 @@ def score_target(path: Path, name: str, is_home: bool, home_seen: bool) -> Targe
 
     rep.overall = round(sum(rep.scores.values()) / len(rep.scores), 1)
 
-    for threshold, label in reversed(LEVELS):
+    for threshold in reversed(LEVEL_THRESHOLDS):
         if rep.overall >= threshold:
-            rep.level = label
+            rep.level_threshold = threshold
             break
 
-    # 盲區提示
     if rep.scores["mcp"] > 0 or rep.scores["skills"] > 0:
-        rep.blind_spots.append(
-            "本工具只偵測『配置完整度』，無法得知這些設定在實際 session 中"
-            "是否真的被觸發。建議接 OpenTelemetry 量測『實際運用度』，"
-            "兩者落差即為改善空間。")
+        rep.blind_spots.append({"key": "scan.blind.config_only", "args": {}})
     if not _exists(path / ".git") and not is_home:
-        rep.blind_spots.append("此目標非 git repo，迭代維度無法評估，分數偏低屬正常。")
+        rep.blind_spots.append({"key": "scan.blind.non_git", "args": {}})
 
     rep.findings = [asdict(f) for f in rep.findings]
     return rep
@@ -595,7 +580,6 @@ def main():
     targets = []
     home_seen = False
 
-    # 先判斷 user-space 是否存在 (影響 context_hygiene 評分)
     home_claude = Path.home() / ".claude"
     if args.include_home and _exists(home_claude):
         home_seen = True
@@ -612,8 +596,9 @@ def main():
                                     is_home=True, home_seen=True))
 
     result = {
-        "dimensions": DIMENSIONS,
-        "levels": LEVELS,
+        # Producers emit only keys + thresholds; report renders text per --lang.
+        "dimensions": DIMENSION_KEYS,
+        "level_thresholds": LEVEL_THRESHOLDS,
         "targets": [asdict(t) for t in targets],
     }
 

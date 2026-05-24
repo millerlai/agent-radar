@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 
 from agent_radar.usage.collectors.base import UsageWindow
-from agent_radar.usage.usage_score import USAGE_DIMENSIONS, score_window
+from agent_radar.usage.usage_score import USAGE_DIMENSION_KEYS, score_window
 
 
 def _empty_window() -> UsageWindow:
@@ -54,8 +54,8 @@ def _rich_window() -> UsageWindow:
 class TestUsageDimensionsKeys:
     def test_keys_match_scanner_dimensions(self):
         # scoring side MUST mirror scanner dim keys (per usage_score docstring)
-        from agent_radar.scanner import DIMENSIONS
-        assert set(USAGE_DIMENSIONS.keys()) == set(DIMENSIONS.keys())
+        from agent_radar.scanner import DIMENSION_KEYS
+        assert set(USAGE_DIMENSION_KEYS) == set(DIMENSION_KEYS)
 
 
 class TestScoreWindowEmpty:
@@ -73,7 +73,7 @@ class TestScoreWindowEmpty:
 
     def test_findings_returned_per_dim(self):
         result = score_window(_empty_window())
-        for dim in USAGE_DIMENSIONS:
+        for dim in USAGE_DIMENSION_KEYS:
             assert dim in result["findings_by_dim"]
 
 

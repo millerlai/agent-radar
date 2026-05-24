@@ -3,28 +3,29 @@
 The merged structure powers the dual-track radar + gap table + improvement
 list in agent_radar.report.
 
-Output shape:
+Output shape (all text rendered at report time via agent_radar.i18n):
 {
-  "dimensions":         {dim: label, ...},         # same keys as scanner
-  "usage_dimensions":   {dim: label, ...},
-  "levels":             [[threshold, label], ...], # carried over from scan
+  "dimensions":         [dim_key, ...],            # from scanner
+  "usage_dimensions":   [dim_key, ...],
+  "level_thresholds":   [0, 20, 40, 60, 80],
   "targets": [
     {
       "name": "...",
       "path": "...",
-      "level": "...",                              # config-side level (scan)
+      "level_threshold": int,                       # config-side
       "config_overall": float,
       "usage_overall":  float | None,
       "scores": {dim: {"config": float,
                        "usage":  float | None,
                        "gap":    float | None}},
-      "config_findings_by_dim": {dim: [...]},      # from scan
-      "usage_findings_by_dim":  {dim: [...]},      # from usage
+      "config_findings_by_dim": {dim: [...]},       # raw structured findings
+      "usage_findings_by_dim":  {dim: [...]},
       "top_gaps": [{"dimension": ..., "gap": ...,
-                    "hint": "..."}],
-      "totals":      {...},                         # diagnostic counts
-      "blind_spots": [...],
-      "notes":       [...],
+                    "config": ..., "usage": ...,
+                    "hint_key": "...", "hint_args": {...}}],
+      "totals":      {...},
+      "blind_spots": [{"key": ..., "args": ...}],
+      "notes":       [str, ...],                    # free-form (collector-supplied)
     }
   ]
 }
@@ -34,7 +35,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 from pathlib import Path
 
 
@@ -42,37 +42,30 @@ from pathlib import Path
 # scan.json introspection — pull denominators usage scoring needs
 # ---------------------------------------------------------------------------
 
-_MCP_COUNT_RE = re.compile(r"(\d+)\s*個\s*MCP\s*server", re.IGNORECASE)
-_SUBAGENT_COUNT_RE = re.compile(r"(\d+)\s*個\s*subagent", re.IGNORECASE)
-_CMD_COUNT_RE = re.compile(r"(\d+)\s*個自訂命令", re.IGNORECASE)
-
-
 def scan_context_for(scan_target: dict) -> dict:
     """Extract counts usage_score needs as denominators.
 
-    Best-effort: scan.py embeds counts in `detail` strings; we regex them out.
-    Falls back to None (let usage_score derive from events) when uncertain.
+    Reads structured ``detail_args`` directly — no string parsing.
     """
     ctx: dict = {}
     for f in scan_target.get("findings", []):
         dim = f.get("dimension")
-        detail = f.get("detail") or ""
-        label = f.get("label") or ""
-        if dim == "mcp" and "數量" in label:
-            m = _MCP_COUNT_RE.search(detail)
-            if m:
-                ctx["servers_configured"] = int(m.group(1))
+        label_key = f.get("label_key", "")
+        args = f.get("detail_args") or {}
+        score = f.get("score", 0)
+
+        if dim == "mcp" and label_key == "scan.mcp.server_count":
+            if "n" in args:
+                ctx["servers_configured"] = int(args["n"])
         elif dim == "automation":
-            if "Hooks" in label and f.get("score", 0) > 0:
+            if label_key == "scan.automation.hooks" and score > 0:
                 # scanner only signals presence; treat as ≥1 registered to keep
-                # ratio definable. Real count would need scanner extension.
+                # the usage ratio definable.
                 ctx.setdefault("hooks_registered", 1)
-            if "Plugins" in label and f.get("score", 0) > 0:
+            elif label_key == "scan.automation.plugins" and score > 0:
                 ctx.setdefault("plugins_installed", 1)
-            if "Subagents" in label:
-                m = _SUBAGENT_COUNT_RE.search(detail)
-                if m:
-                    ctx["subagents_defined"] = int(m.group(1))
+            elif label_key == "scan.automation.subagents" and "n" in args:
+                ctx["subagents_defined"] = int(args["n"])
     return ctx
 
 
@@ -80,48 +73,46 @@ def scan_context_for(scan_target: dict) -> dict:
 # improvement-hint generator
 # ---------------------------------------------------------------------------
 
-def _gap_hint(dim: str, target_name: str, scan_target: dict,
-              usage_target: dict | None) -> str:
-    """One-line, actionable suggestion based on the dimension and any context."""
+def _gap_hint(dim: str, target_name: str,
+              usage_target: dict | None) -> tuple[str, dict]:
+    """Return (hint_key, hint_args). Rendered to text by agent_radar.i18n."""
     usage_findings = (usage_target or {}).get("findings_by_dim", {}).get(dim, [])
 
     if dim == "skills":
-        proactive = next((x for x in usage_findings if "proactive" in x["label"]), None)
-        return (
-            f"`{target_name}`：Skills 配置完整但實際觸發少。"
-            + (f"proactive 比例僅 {int(proactive['score']/proactive['weight']*100)}%，"
-               "重寫 description 讓模型能命中觸發條件。"
-               if proactive and proactive["weight"] else
-               "考慮重寫 SKILL.md 的 description，加入明確觸發場景。")
+        proactive = next(
+            (x for x in usage_findings if x.get("label_key") == "usage.skills.proactive"),
+            None,
         )
+        if proactive and proactive.get("weight"):
+            pct = int(proactive["score"] / proactive["weight"] * 100)
+            return "gap.skills.proactive_low", {"target": target_name, "pct": pct}
+        return "gap.skills.generic", {"target": target_name}
     if dim == "mcp":
-        return (f"`{target_name}`：你設定了 MCP server，但實際被呼叫的比例偏低。"
-                "檢查哪些 server 從未被使用，刪除或重新評估。")
+        return "gap.mcp", {"target": target_name}
     if dim == "automation":
-        return (f"`{target_name}`：自動化 (hooks/plugins/subagents) 配置存在但運用不足。"
-                "確認 hooks 是否真的觸發、subagents 是否被派遣。")
+        return "gap.automation", {"target": target_name}
     if dim == "context_hygiene":
-        return (f"`{target_name}`：CLAUDE.md / settings 結構良好，但 session 中"
-                "幾乎不用 @ 引用。在常用檔上養成 `@path` 習慣以聚焦 context。")
+        return "gap.context_hygiene", {"target": target_name}
     if dim == "claude_md":
-        return (f"`{target_name}`：CLAUDE.md 寫得齊全，但 tool_decision 顯示提議常被拒。"
-                "回頭看哪些建議被拒，把規則明文寫進 CLAUDE.md。")
-    return f"`{target_name}` 在 {dim} 維度配置 vs 運用落差大，請進一步審視。"
+        return "gap.claude_md", {"target": target_name}
+    return "gap.generic", {"target": target_name, "dim": dim}
 
 
-def _rank_gaps(target_name: str, scan_target: dict, usage_target: dict | None,
+def _rank_gaps(target_name: str, usage_target: dict | None,
                merged_scores: dict, top_n: int = 3) -> list[dict]:
     rows = []
     for dim, scores in merged_scores.items():
         gap = scores["gap"]
         if gap is None or gap <= 10:  # noise floor — ignore tiny gaps
             continue
+        hint_key, hint_args = _gap_hint(dim, target_name, usage_target)
         rows.append({
             "dimension": dim,
             "gap": gap,
             "config": scores["config"],
             "usage": scores["usage"],
-            "hint": _gap_hint(dim, target_name, scan_target, usage_target),
+            "hint_key": hint_key,
+            "hint_args": hint_args,
         })
     rows.sort(key=lambda r: r["gap"], reverse=True)
     return rows[:top_n]
@@ -132,8 +123,18 @@ def _rank_gaps(target_name: str, scan_target: dict, usage_target: dict | None,
 # ---------------------------------------------------------------------------
 
 def merge(scan_json: dict, usage_json: dict) -> dict:
-    dims: dict = scan_json["dimensions"]
-    usage_dims: dict = usage_json.get("usage_dimensions", dims)
+    dims = scan_json["dimensions"]
+    if isinstance(dims, dict):  # legacy shape: dict of {key: label}
+        dim_keys = list(dims.keys())
+    else:
+        dim_keys = list(dims)
+
+    usage_dims = usage_json.get("usage_dimensions", dim_keys)
+    if isinstance(usage_dims, dict):
+        usage_dim_keys = list(usage_dims.keys())
+    else:
+        usage_dim_keys = list(usage_dims)
+
     usage_by_name: dict = usage_json.get("targets_by_name", {})
 
     merged_targets = []
@@ -142,20 +143,19 @@ def merge(scan_json: dict, usage_json: dict) -> dict:
         utgt = usage_by_name.get(name)
         usage_scores = (utgt or {}).get("scores", {})
 
-        # build per-dim {config, usage, gap}
         merged_scores: dict = {}
-        for dim in dims:
+        for dim in dim_keys:
             cfg = target["scores"].get(dim, 0.0)
-            use = usage_scores.get(dim)  # None for iteration
+            use = usage_scores.get(dim)
             gap = (round(cfg - use, 1) if isinstance(use, (int, float)) else None)
             merged_scores[dim] = {"config": cfg, "usage": use, "gap": gap}
 
-        top_gaps = _rank_gaps(name, target, utgt, merged_scores)
+        top_gaps = _rank_gaps(name, utgt, merged_scores)
 
         merged_targets.append({
             "name": name,
             "path": target.get("path"),
-            "level": target.get("level"),
+            "level_threshold": target.get("level_threshold", 0),
             "config_overall": target.get("overall"),
             "usage_overall": (utgt or {}).get("overall"),
             "scores": merged_scores,
@@ -168,9 +168,9 @@ def merge(scan_json: dict, usage_json: dict) -> dict:
         })
 
     return {
-        "dimensions": dims,
-        "usage_dimensions": usage_dims,
-        "levels": scan_json.get("levels", []),
+        "dimensions": dim_keys,
+        "usage_dimensions": usage_dim_keys,
+        "level_thresholds": scan_json.get("level_thresholds", [0, 20, 40, 60, 80]),
         "targets": merged_targets,
     }
 
