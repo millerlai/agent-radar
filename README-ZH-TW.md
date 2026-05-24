@@ -59,16 +59,30 @@ ASCII art / 裝飾性內容偵測、CLAUDE.md 過大警告等),用純 Python 重
 
 ### 方式 A · 從 PyPI / 原始碼安裝 (推薦)
 
-支援 `pip` / `uv` / `poetry` 三種工具,安裝完 `agent-radar` 會在 PATH 上。
+支援 `pip` / `uv` / `poetry`。裝完後先驗證指令在 PATH 上:
 
 ```bash
-# pip
+agent-radar --help
+```
+
+有印出 help 就完成了。如果出現 `command not found` / `不是內部或外部命令`,
+請看下面的 **「`agent-radar` 找不到指令?」** 段落——
+`python -m agent_radar` 是隨時可用的替代寫法。
+
+```bash
+# pip (系統 / venv)
 pip install agent-radar
+
+# pip --user (免管理員權限;Windows 上請看下方 PATH 提醒)
+pip install --user agent-radar
 
 # uv
 uv pip install agent-radar
-# 或裝成 uv tool
+# 或裝成 uv 管理的工具 (會自動處理 PATH)
 uv tool install agent-radar
+
+# pipx (獨立環境,自動處理 PATH —— Windows 上最推薦)
+pipx install agent-radar
 
 # poetry
 poetry add agent-radar
@@ -80,10 +94,22 @@ pip install -e .
 agent-radar --help
 ```
 
-不想裝套件時,也可以直接從 repo 跑:
+#### `agent-radar` 找不到指令?
+
+兩個常見原因:
+
+1. **Windows 上用 `pip install --user`** 會把 `agent-radar.exe` 裝到
+   `%APPDATA%\Python\Python3XX\Scripts\`,而這個目錄預設**不在 PATH** 上。
+   解法:把該目錄加進 PATH,或改用 `pipx install agent-radar` /
+   `uv tool install agent-radar` (都會自動處理 entry point)。
+2. **在沒啟用的 venv 裡安裝** —— 先 activate 該 venv,或直接呼叫完整
+   路徑的執行檔。
+
+不管哪種情況,以下這種寫法都能用,完全不需要動 PATH:
 
 ```bash
-python -m agent_radar --help        # 在 clone 出來的目錄裡執行
+python -m agent_radar --help
+python -m agent_radar scan ...     # 參數跟 `agent-radar scan ...` 一模一樣
 ```
 
 ### 方式 B · 安裝為 Claude Code skill (推薦給日常使用)
@@ -114,16 +140,23 @@ skill 目錄裡改用 `python -m agent_radar ...`。
 
 ### 30 秒快速開始
 
-掃當前 repo + 你的 user-space,生成完整含實際運用度的 HTML 報告:
+掃當前 repo + 你的 user-space,生成完整含實際運用度的 HTML 報告。
+請在「想被掃描的 repo」目錄裡執行:
 
 ```bash
 agent-radar scan --include-home . -o scan.json
 agent-radar session -o session.json
 agent-radar report scan.json --session session.json -o report.html
+
+# 開啟報告
 open report.html        # macOS
 xdg-open report.html    # Linux
 start report.html       # Windows (PowerShell / cmd)
 ```
+
+如果 `agent-radar` 找不到指令,把每一行的 `agent-radar` 換成
+`python -m agent_radar` 即可 (參數完全相同)。詳見上方
+[**`agent-radar` 找不到指令?**](#agent-radar-找不到指令)。
 
 ### 子指令一覽
 
