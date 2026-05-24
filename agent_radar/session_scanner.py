@@ -24,16 +24,11 @@ session 紀錄 (~/.claude/projects/*/*.jsonl),量化使用者真實用了 Claude
   5. context_efficiency - 重複讀同檔比例低 = context 利用率高
   6. session_volume   - Session 量 (基準曝光度,過低時其他分數參考價值低)
 
-用法
-----
-  # 掃 user-space 所有 projects
-  agent-radar session -o session.json
-
-  # 只統計某幾個 project (用原始 repo 路徑)
-  agent-radar session /path/to/repo -o session.json
-
-  # 自訂 projects 根目錄
-  agent-radar session --projects-dir /custom/.claude/projects -o session.json
+JSON shape
+----------
+Findings carry i18n keys (``label_key`` / ``detail_key`` + ``detail_args``);
+``blind_spots`` are ``{"key": ..., "args": ...}`` dicts. Rendering is done by
+``agent_radar.report`` via ``agent_radar.i18n``.
 """
 
 import argparse
@@ -44,14 +39,10 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-USAGE_DIMENSIONS = {
-    "tool_diversity": "工具多樣性",
-    "skill_triggered": "Skills 實際觸發",
-    "mcp_triggered": "MCP 實際呼叫",
-    "low_correction": "低糾正率",
-    "context_efficiency": "Context 效率",
-    "session_volume": "Session 量",
-}
+USAGE_DIMENSION_KEYS = [
+    "tool_diversity", "skill_triggered", "mcp_triggered",
+    "low_correction", "context_efficiency", "session_volume",
+]
 
 # 使用者糾正訊號 (中英雙語)。匹配 user 訊息開頭的糾正性語句。
 CORRECTION_PATTERNS = [
@@ -67,7 +58,7 @@ CORRECTION_RE = re.compile("|".join(CORRECTION_PATTERNS), re.IGNORECASE)
 @dataclass
 class UsageReport:
     name: str
-    project_dir: str          # 編碼後的 projects/ 子目錄名
+    project_dir: str
     sessions: int = 0
     total_messages: int = 0
     tool_calls: int = 0
@@ -88,14 +79,11 @@ def _clamp(v: float, lo=0.0, hi=100.0) -> float:
 
 
 def _encode_path(p: Path) -> str:
-    """模擬 Claude Code 把 absolute path 編碼為 projects/ 子目錄名的規則。
-    觀察結果: drive ':' / 路徑分隔符 → '-'。例: C:\\foo\\bar → C--foo-bar"""
     s = str(p.resolve())
     return s.replace(":", "-").replace("\\", "-").replace("/", "-")
 
 
 def _iter_jsonl(path: Path):
-    """逐行 yield JSONL,跳過解析失敗的行 (session JSONL 可能有截斷)。"""
     try:
         with path.open("r", encoding="utf-8", errors="ignore") as f:
             for line in f:
@@ -111,7 +99,6 @@ def _iter_jsonl(path: Path):
 
 
 def _extract_text(content) -> str:
-    """從 message.content 抓出純文字 (可能是 string 或 list-of-blocks)。"""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -125,7 +112,6 @@ def _extract_text(content) -> str:
 
 
 def _walk_tool_uses(content):
-    """從 assistant message.content 抓出 tool_use blocks。"""
     if not isinstance(content, list):
         return
     for block in content:
@@ -134,8 +120,6 @@ def _walk_tool_uses(content):
 
 
 def analyze_project(proj_dir: Path) -> UsageReport:
-    """分析單一 project (對應一個 cwd) 的所有 JSONL session。"""
-    # 從編碼路徑回推 display name (取最後一段)
     name = proj_dir.name.rsplit("-", 1)[-1] or proj_dir.name
     rep = UsageReport(name=name, project_dir=proj_dir.name)
 
@@ -143,14 +127,12 @@ def analyze_project(proj_dir: Path) -> UsageReport:
     rep.sessions = len(jsonl_files)
 
     tool_counter: Counter = Counter()
-    file_reads: dict = defaultdict(lambda: defaultdict(int))  # session_id -> path -> count
+    file_reads: dict = defaultdict(lambda: defaultdict(int))
 
     for jf in jsonl_files:
         session_id = jf.stem
         for entry in _iter_jsonl(jf):
             t = entry.get("type")
-            # Claude Code JSONL 頂層 type 是 'user' / 'assistant' / 'system' /
-            # 'attachment' / 'last-prompt' / 'permission-mode' 等
             if t not in ("user", "assistant"):
                 continue
             rep.total_messages += 1
@@ -159,10 +141,9 @@ def analyze_project(proj_dir: Path) -> UsageReport:
             if t == "user":
                 rep.user_messages += 1
                 text = _extract_text(content)
-                # 排除 tool_result wrapper (content 為 list 且只有 tool_result block)
                 if text and CORRECTION_RE.search(text):
                     rep.corrections += 1
-            else:  # assistant
+            else:
                 for tu in _walk_tool_uses(content):
                     name_ = tu.get("name", "")
                     if not name_:
@@ -173,7 +154,6 @@ def analyze_project(proj_dir: Path) -> UsageReport:
                         rep.skill_calls += 1
                     if name_.startswith("mcp__"):
                         rep.mcp_calls += 1
-                    # context efficiency: Read 同檔重複
                     if name_ == "Read":
                         inp = tu.get("input") or {}
                         fp = inp.get("file_path")
@@ -181,7 +161,6 @@ def analyze_project(proj_dir: Path) -> UsageReport:
                             file_reads[session_id][fp] += 1
                             rep.reads_total += 1
 
-    # 重複讀取統計: 同 session 同檔 read > 1 次,超出部分算重複
     for sess, paths in file_reads.items():
         for fp, n in paths.items():
             if n > 1:
@@ -189,67 +168,81 @@ def analyze_project(proj_dir: Path) -> UsageReport:
 
     rep.unique_tools = sorted(tool_counter.keys())
 
-    # ----- findings & scores -----
     findings = []
 
-    # 1. tool_diversity: 用過幾種不同工具 (8 種以上滿分)
+    # 1. tool_diversity
     n_tools = len(rep.unique_tools)
     score = _clamp(n_tools * 12.5, 0, 100)
+    top_str = ", ".join(f"{k}({v})" for k, v in tool_counter.most_common(5))
     findings.append({
-        "dimension": "tool_diversity", "label": "Tool 多樣性",
+        "dimension": "tool_diversity",
+        "label_key": "session.tool_diversity",
         "weight": 100, "score": round(score, 1),
-        "detail": f"{n_tools} 種工具,前 5: " +
-                  ", ".join(f"{k}({v})" for k, v in tool_counter.most_common(5)),
+        "detail_key": "session.tool_diversity.detail",
+        "detail_args": {"n": n_tools, "top": top_str},
     })
 
-    # 2. skill_triggered: 任何 skill call > 0 即得基本分,多次更高
+    # 2. skill_triggered
     score = _clamp(rep.skill_calls * 12, 0, 100)
     findings.append({
-        "dimension": "skill_triggered", "label": "Skill tool 呼叫",
+        "dimension": "skill_triggered",
+        "label_key": "session.skill_calls",
         "weight": 100, "score": round(score, 1),
-        "detail": f"{rep.skill_calls} 次 Skill 觸發" if rep.skill_calls
-                  else "Skill 從未觸發 (description 可能寫不夠好,或無安裝 skills)",
+        "detail_key": ("session.skill_calls.have" if rep.skill_calls
+                       else "session.skill_calls.none"),
+        "detail_args": ({"n": rep.skill_calls} if rep.skill_calls else {}),
     })
 
     # 3. mcp_triggered
     score = _clamp(rep.mcp_calls * 8, 0, 100)
     findings.append({
-        "dimension": "mcp_triggered", "label": "MCP tool 呼叫",
+        "dimension": "mcp_triggered",
+        "label_key": "session.mcp_calls",
         "weight": 100, "score": round(score, 1),
-        "detail": f"{rep.mcp_calls} 次 MCP server 呼叫" if rep.mcp_calls
-                  else "MCP server 從未被呼叫",
+        "detail_key": ("session.mcp_calls.have" if rep.mcp_calls
+                       else "session.mcp_calls.none"),
+        "detail_args": ({"n": rep.mcp_calls} if rep.mcp_calls else {}),
     })
 
-    # 4. low_correction (反向): 糾正率低 = 高分。
+    # 4. low_correction (反向)
     if rep.user_messages == 0:
         score = 0
-        detail = "無 user 訊息可評估"
+        detail_key = "session.low_correction.empty"
+        detail_args: dict = {}
     else:
         rate = rep.corrections / rep.user_messages
-        # 糾正率 0% → 100;5% → ~60;10% → ~20;>15% → 0
         score = _clamp(100 - rate * 700, 0, 100)
-        detail = f"{rep.corrections}/{rep.user_messages} user 訊息含糾正 ({rate*100:.1f}%)"
+        detail_key = "session.low_correction.detail"
+        detail_args = {"c": rep.corrections, "m": rep.user_messages,
+                       "pct": rate * 100}
     findings.append({
-        "dimension": "low_correction", "label": "低糾正率",
+        "dimension": "low_correction",
+        "label_key": "session.low_correction",
         "weight": 100, "score": round(score, 1),
-        "detail": detail,
+        "detail_key": detail_key,
+        "detail_args": detail_args,
     })
 
-    # 5. context_efficiency: 重複讀檔比例低 = 高分
+    # 5. context_efficiency
     if rep.reads_total == 0:
-        score = 50  # 沒讀過檔案,中性分
-        detail = "無 Read 行為"
+        score = 50
+        detail_key = "session.read_repeat.empty"
+        detail_args = {}
     else:
         repeat_rate = rep.reads_repeat / rep.reads_total
         score = _clamp(100 - repeat_rate * 200, 0, 100)
-        detail = f"{rep.reads_repeat}/{rep.reads_total} 為重複讀檔 ({repeat_rate*100:.1f}%)"
+        detail_key = "session.read_repeat.detail"
+        detail_args = {"r": rep.reads_repeat, "t": rep.reads_total,
+                       "pct": repeat_rate * 100}
     findings.append({
-        "dimension": "context_efficiency", "label": "Read 重複率 (反向)",
+        "dimension": "context_efficiency",
+        "label_key": "session.read_repeat",
         "weight": 100, "score": round(score, 1),
-        "detail": detail,
+        "detail_key": detail_key,
+        "detail_args": detail_args,
     })
 
-    # 6. session_volume: 曝光度
+    # 6. session_volume
     if rep.sessions == 0:
         score = 0
     elif rep.sessions < 3:
@@ -259,9 +252,11 @@ def analyze_project(proj_dir: Path) -> UsageReport:
     else:
         score = 100
     findings.append({
-        "dimension": "session_volume", "label": "Session 量",
+        "dimension": "session_volume",
+        "label_key": "session.session_volume",
         "weight": 100, "score": round(score, 1),
-        "detail": f"{rep.sessions} 個 session, {rep.total_messages} 則訊息",
+        "detail_key": "session.session_volume.detail",
+        "detail_args": {"s": rep.sessions, "m": rep.total_messages},
     })
 
     rep.findings = findings
@@ -290,7 +285,6 @@ def main():
               file=sys.stderr)
         sys.exit(1)
 
-    # 篩選: 若指定 paths,把它們編碼成 projects/ 子目錄名
     filter_dirs = None
     if args.paths:
         filter_dirs = {_encode_path(Path(p)) for p in args.paths}
@@ -306,12 +300,11 @@ def main():
         targets.append(analyze_project(child))
 
     result = {
-        "usage_dimensions": USAGE_DIMENSIONS,
+        "usage_dimensions": USAGE_DIMENSION_KEYS,
         "targets": [asdict(t) for t in targets],
         "blind_spots": [
-            "本工具讀取本機 JSONL,無法觀測雲端 / 其他機器的 session;"
-            "若團隊跨機器使用,建議搭配 OpenTelemetry 中央化收集。",
-            "糾正率僅匹配字面 pattern,語意級糾正 (例如冗長解釋為什麼錯) 偵測不到。",
+            {"key": "session.blind.local_only", "args": {}},
+            {"key": "session.blind.pattern_only", "args": {}},
         ],
     }
 

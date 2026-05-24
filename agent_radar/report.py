@@ -4,6 +4,9 @@ agent-radar :: agent_radar.report
 =================================
 讀取 ``agent-radar scan`` 產出的 JSON，生成單檔 HTML 雷達圖診斷報告。
 
+JSON 採 i18n key 形式 (label_key / detail_key / detail_args / blind_spot key …);
+本檔透過 ``agent_radar.i18n`` 依 ``--lang`` 把它們渲染成顯示文字。
+
 用法:
   agent-radar scan <paths...> -o scan.json
   agent-radar report scan.json -o report.html
@@ -14,14 +17,15 @@ import json
 import math
 from pathlib import Path
 
+from . import i18n as i18n_mod
+
 
 # 色票：暗色「診斷儀表板」風
 PALETTE = ["#4ade80", "#38bdf8", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#2dd4bf", "#f87171"]
 
 
 # ----------------------------------------------------------------------------
-# i18n: UI 字串 + 維度 / 層級翻譯
-# 預設語言 en;CLI 可用 --lang 或互動式選單覆寫
+# i18n: UI chrome strings only (finding/dimension/level strings live in i18n.py)
 # ----------------------------------------------------------------------------
 
 STRINGS = {
@@ -134,48 +138,53 @@ STRINGS = {
     },
 }
 
-# 維度 key 的英文標籤 (agent-radar scan 預設輸出繁中)
-DIMENSIONS_I18N = {
-    "en": {
-        "claude_md": "CLAUDE.md Maturity",
-        "skills": "Skills Usage",
-        "mcp": "MCP Integration",
-        "automation": "Automation",
-        "context_hygiene": "Context Hygiene",
-        "iteration": "Iteration & Maintenance",
-    },
-}
-
-# 成熟度層級英文版 (對應 scanner.LEVELS)
-LEVELS_I18N = {
-    "en": [
-        (0, "L0 · Unaware"),
-        (20, "L1 · Reactive"),
-        (40, "L2 · Structured"),
-        (60, "L3 · Advanced"),
-        (80, "L4 · Mastery"),
-    ],
-}
-
 
 def _t(lang, key):
     """查表;查不到就 fallback 到 en。"""
     return STRINGS.get(lang, STRINGS["en"]).get(key, STRINGS["en"].get(key, key))
 
 
-def _dim_labels(data_dims, lang):
-    """回傳 {dim_key: label} 的字典 — 英文模式查 DIMENSIONS_I18N,中文模式用 JSON 原值。"""
-    if lang == "en":
-        return {k: DIMENSIONS_I18N["en"].get(k, v) for k, v in data_dims.items()}
-    return dict(data_dims)
+# ----------------------------------------------------------------------------
+# Per-finding render helpers (drive everything through agent_radar.i18n).
+# ----------------------------------------------------------------------------
+
+def _finding_label(f: dict, lang: str) -> str:
+    return i18n_mod.t_label(f.get("label_key", ""), lang)
 
 
-def _levels(data_levels, lang):
-    """回傳 [(threshold, label)] — 英文模式查 LEVELS_I18N,中文模式用 JSON 原值。"""
-    if lang == "en":
-        return LEVELS_I18N["en"]
-    return data_levels
+def _finding_detail(f: dict, lang: str) -> str:
+    return i18n_mod.t_detail(f.get("detail_key"), f.get("detail_args"), lang)
 
+
+def _blind_text(b, lang: str) -> str:
+    """blind_spots may be {"key", "args"} dicts (i18n keys) or legacy strings."""
+    if isinstance(b, dict):
+        return i18n_mod.t_blind(b.get("key", ""), b.get("args"), lang)
+    return str(b)
+
+
+def _hint_text(g: dict, lang: str) -> str:
+    return i18n_mod.t_hint(g.get("hint_key", "gap.generic"),
+                           g.get("hint_args"), lang)
+
+
+def _level_label(threshold: int, lang: str) -> str:
+    for th, entry in i18n_mod.LEVELS:
+        if th == threshold:
+            return entry.get(lang, entry["en"])
+    return ""
+
+
+def _normalise_dimensions(value) -> list[str]:
+    """Accepts either the new list-of-keys or the legacy {key: label} dict."""
+    if isinstance(value, dict):
+        return list(value.keys())
+    return list(value or [])
+
+
+# ----------------------------------------------------------------------------
+# SVG / table helpers
+# ----------------------------------------------------------------------------
 
 def _polar_point(cx, cy, radius, value, i, n):
     ang = -math.pi / 2 + (2 * math.pi * i / n)
@@ -197,7 +206,6 @@ def radar_svg(targets, dim_keys, dim_labels, size=460, idx_offset=0):
     rings = 4
 
     def point(value, i):
-        # value 0..100 -> 半徑；i -> 角度 (從正上方順時針)
         ang = -math.pi / 2 + (2 * math.pi * i / n)
         r = radius * (value / 100)
         return cx + r * math.cos(ang), cy + r * math.sin(ang)
@@ -226,7 +234,6 @@ def radar_svg(targets, dim_keys, dim_labels, size=460, idx_offset=0):
         elif math.cos(ang) < -0.3:
             anchor = "end"
         label = dim_labels[key]
-        # 中文標籤拆兩段更好讀
         parts.append(
             f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="{anchor}" '
             f'class="axis-label" dominant-baseline="middle">{label}</text>')
@@ -250,7 +257,7 @@ def radar_svg(targets, dim_keys, dim_labels, size=460, idx_offset=0):
     return "\n".join(parts)
 
 
-def findings_html(target):
+def findings_html(target, dim_labels, lang):
     """單一目標的維度明細手風琴。"""
     by_dim = {}
     for f in target["findings"]:
@@ -265,17 +272,17 @@ def findings_html(target):
             rows.append(f"""
               <div class="finding {state}">
                 <div class="f-head">
-                  <span class="f-label">{f['label']}</span>
+                  <span class="f-label">{_finding_label(f, lang)}</span>
                   <span class="f-score">{f['score']:.0f}/{f['weight']:.0f}</span>
                 </div>
                 <div class="f-bar"><i style="width:{ratio*100:.0f}%"></i></div>
-                <div class="f-detail">{f['detail']}</div>
+                <div class="f-detail">{_finding_detail(f, lang)}</div>
               </div>""")
         tone = "good" if score >= 60 else ("mid" if score >= 30 else "low")
         blocks.append(f"""
           <details class="dim-block">
             <summary>
-              <span class="d-name">{DIM_LABELS[dim]}</span>
+              <span class="d-name">{dim_labels[dim]}</span>
               <span class="d-score {tone}">{score:.0f}</span>
             </summary>
             <div class="findings">{''.join(rows)}</div>
@@ -283,22 +290,17 @@ def findings_html(target):
     return "".join(blocks)
 
 
-DIM_LABELS = {}  # 由 main 注入
-
-
 def build_usage_section(session_data, lang="en"):
     """生成「實際運用度」雷達卡 (來自 agent-radar session 輸出)。"""
     if not session_data:
         return ""
-    dims = session_data.get("usage_dimensions", {})
+    dim_keys = _normalise_dimensions(session_data.get("usage_dimensions", {}))
     targets = session_data.get("targets", [])
-    if not targets or not dims:
+    if not targets or not dim_keys:
         return ""
 
-    dim_keys = list(dims.keys())
-    # 重複使用 radar_svg,需要把 usage targets 的 scores 套上 dim_keys
-    dims_localized = _dim_labels(dims, lang)
-    radar = radar_svg(targets, dim_keys, dims_localized, idx_offset=3)
+    dim_labels = i18n_mod.dimensions_for(dim_keys, lang)
+    radar = radar_svg(targets, dim_keys, dim_labels, idx_offset=3)
 
     legend = "".join(
         f'<span class="leg"><i style="background:{PALETTE[(i+3)%len(PALETTE)]}"></i>'
@@ -306,7 +308,7 @@ def build_usage_section(session_data, lang="en"):
         for i, t in enumerate(targets))
 
     blind = "".join(
-        f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{b}</p>'
+        f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{_blind_text(b, lang)}</p>'
         for b in session_data.get("blind_spots", []))
 
     # 個別 target 的明細
@@ -319,11 +321,11 @@ def build_usage_section(session_data, lang="en"):
             finding_rows.append(f"""
               <div class="finding {state}">
                 <div class="f-head">
-                  <span class="f-label">{f['label']}</span>
+                  <span class="f-label">{_finding_label(f, lang)}</span>
                   <span class="f-score">{f['score']:.0f}/{f['weight']:.0f}</span>
                 </div>
                 <div class="f-bar"><i style="width:{ratio*100:.0f}%"></i></div>
-                <div class="f-detail">{f['detail']}</div>
+                <div class="f-detail">{_finding_detail(f, lang)}</div>
               </div>""")
         rows.append(f"""
           <details class="dim-block">
@@ -348,16 +350,13 @@ def build_usage_section(session_data, lang="en"):
 
 
 def build_html(data, session_data=None, lang="en"):
-    global DIM_LABELS
-    dims_localized = _dim_labels(data["dimensions"], lang)
-    DIM_LABELS = dims_localized
-    dim_keys = list(data["dimensions"].keys())
+    dim_keys = _normalise_dimensions(data["dimensions"])
+    dim_labels = i18n_mod.dimensions_for(dim_keys, lang)
     targets = data["targets"]
 
     if not targets:
         return f"<html><body>{_t(lang,'no_targets')}</body></html>"
 
-    # 團隊聚合 (>1 目標時顯示)
     is_team = len(targets) > 1
     team_avg = {}
     for k in dim_keys:
@@ -365,10 +364,8 @@ def build_html(data, session_data=None, lang="en"):
         team_avg[k] = round(sum(vals) / len(vals), 1)
     team_overall = round(sum(team_avg.values()) / len(team_avg), 1)
 
-    # --- 雷達圖 ---
-    radar = radar_svg(targets, dim_keys, dims_localized)
+    radar = radar_svg(targets, dim_keys, dim_labels)
 
-    # --- 圖例 ---
     legend = "".join(
         f'<span class="leg"><i style="background:{PALETTE[i%len(PALETTE)]}"></i>'
         f'{t["name"]} <b>{t["overall"]:.0f}</b></span>'
@@ -383,7 +380,7 @@ def build_html(data, session_data=None, lang="en"):
                   <td class="rank">{i+1}</td>
                   <td>{t['name']}</td>
                   <td><span class="pill {('good' if t['overall']>=60 else 'mid' if t['overall']>=30 else 'low')}">{t['overall']:.0f}</span></td>
-                  <td class="lvl">{t['level']}</td>
+                  <td class="lvl">{_level_label(t.get('level_threshold', 0), lang)}</td>
                 </tr>""" for i, t in enumerate(ranked))
         ranking = f"""
         <section class="card">
@@ -405,146 +402,24 @@ def build_html(data, session_data=None, lang="en"):
           </div>
           <div class="big-score {('good' if t['overall']>=60 else 'mid' if t['overall']>=30 else 'low')}">
             <span class="num">{t['overall']:.0f}</span>
-            <span class="lvl-tag">{t['level']}</span>
+            <span class="lvl-tag">{_level_label(t.get('level_threshold', 0), lang)}</span>
           </div>
         </div>
-        {findings_html(t)}
-        {"".join(f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{b}</p>' for b in t.get('blind_spots', []))}
+        {findings_html(t, dim_labels, lang)}
+        {"".join(f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{_blind_text(b, lang)}</p>' for b in t.get('blind_spots', []))}
       </section>""" for t in targets)
 
     # --- 層級量尺 ---
+    level_thresholds = data.get("level_thresholds")
+    if level_thresholds is None:
+        level_thresholds = [th for th, _ in i18n_mod.LEVELS]
     level_scale = "".join(
-        f'<div class="lv"><b>{lbl.split("·")[0].strip()}</b>'
-        f'<span>{lbl.split("·")[1].strip() if "·" in lbl else ""}</span>'
-        f'<i>{th}+</i></div>'
-        for th, lbl in _levels(data["levels"], lang))
+        _level_scale_item(th, lang) for th in level_thresholds)
 
-    return f"""<!DOCTYPE html>
-<html lang="{_t(lang,"html_lang")}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{_t(lang,"title_scan")}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  :root {{
-    --bg: #0b0f14;
-    --panel: #121821;
-    --panel-2: #0f141b;
-    --line: #1f2a37;
-    --ink: #e4ecf4;
-    --ink-dim: #8195a9;
-    --good: #4ade80;
-    --mid: #fbbf24;
-    --low: #f87171;
-    --accent: #38bdf8;
-  }}
-  body {{
-    background:
-      radial-gradient(900px 600px at 80% -10%, rgba(56,189,248,.08), transparent),
-      radial-gradient(700px 500px at 0% 100%, rgba(74,222,128,.06), transparent),
-      var(--bg);
-    color: var(--ink);
-    font-family: 'Noto Sans TC', system-ui, sans-serif;
-    line-height: 1.6;
-    padding: 48px 20px 80px;
-    min-height: 100vh;
-  }}
-  .wrap {{ max-width: 1080px; margin: 0 auto; }}
-  .masthead {{ margin-bottom: 36px; }}
-  .kicker {{
-    font-family: 'JetBrains Mono', monospace; font-size: 12px; letter-spacing: .28em;
-    color: var(--accent); text-transform: uppercase; margin-bottom: 12px;
-  }}
-  h1 {{ font-size: clamp(28px, 5vw, 46px); font-weight: 900; line-height: 1.1; letter-spacing: -.02em; }}
-  h1 .em {{ color: var(--accent); }}
-  .sub {{ color: var(--ink-dim); margin-top: 14px; max-width: 60ch; font-size: 15px; }}
-
-  .card {{
-    background: linear-gradient(180deg, var(--panel), var(--panel-2));
-    border: 1px solid var(--line); border-radius: 16px;
-    padding: 28px; margin-bottom: 22px;
-  }}
-  h2 {{ font-size: 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }}
-  h2::before {{ content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }}
-  .card-sub {{ color: var(--ink-dim); font-size: 13.5px; max-width: 70ch; margin: -8px 0 18px; }}
-
-  .radar-wrap {{ display: grid; grid-template-columns: 1.1fr .9fr; gap: 24px; align-items: center; }}
-  @media (max-width: 760px) {{ .radar-wrap {{ grid-template-columns: 1fr; }} }}
-  .radar {{ width: 100%; height: auto; }}
-  .grid-ring {{ fill: none; stroke: var(--line); stroke-width: 1; }}
-  .axis {{ stroke: var(--line); stroke-width: 1; }}
-  .axis-label {{ fill: var(--ink-dim); font-size: 12.5px; font-family: 'Noto Sans TC'; font-weight: 500; }}
-  .series {{ filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 40%, transparent)); }}
-
-  .legend {{ display: flex; flex-direction: column; gap: 10px; }}
-  .leg {{ display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-dim); }}
-  .leg i {{ width: 14px; height: 14px; border-radius: 4px; display: inline-block; }}
-  .leg b {{ margin-left: auto; color: var(--ink); font-family: 'JetBrains Mono'; }}
-
-  .scale {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; }}
-  .lv {{ flex: 1; min-width: 110px; background: var(--panel-2); border: 1px solid var(--line);
-         border-radius: 10px; padding: 10px 12px; }}
-  .lv b {{ display: block; font-family: 'JetBrains Mono'; color: var(--accent); font-size: 13px; }}
-  .lv span {{ display: block; font-size: 12px; color: var(--ink-dim); }}
-  .lv i {{ font-style: normal; font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono'; }}
-
-  .rank-table {{ width: 100%; border-collapse: collapse; }}
-  .rank-table th {{ text-align: left; font-size: 12px; color: var(--ink-dim); font-weight: 500;
-                    padding: 8px 10px; border-bottom: 1px solid var(--line); }}
-  .rank-table td {{ padding: 12px 10px; border-bottom: 1px solid var(--line); font-size: 14px; }}
-  .rank-table .rank {{ font-family: 'JetBrains Mono'; color: var(--ink-dim); width: 36px; }}
-  .lvl {{ font-size: 12px; color: var(--ink-dim); }}
-  .pill {{ font-family: 'JetBrains Mono'; font-weight: 700; padding: 3px 10px; border-radius: 999px; font-size: 13px; }}
-  .pill.good {{ background: rgba(74,222,128,.15); color: var(--good); }}
-  .pill.mid {{ background: rgba(251,191,36,.15); color: var(--mid); }}
-  .pill.low {{ background: rgba(248,113,113,.15); color: var(--low); }}
-  .team-avg {{ margin-top: 16px; color: var(--ink-dim); font-size: 14px; }}
-  .team-avg b {{ color: var(--ink); font-family: 'JetBrains Mono'; font-size: 18px; }}
-
-  .target-head {{ display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
-                  margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
-  .target-head h3 {{ font-size: 20px; }}
-  .path {{ font-family: 'JetBrains Mono'; font-size: 11.5px; color: var(--ink-dim); word-break: break-all; }}
-  .big-score {{ text-align: right; min-width: 110px; }}
-  .big-score .num {{ font-family: 'JetBrains Mono'; font-weight: 800; font-size: 40px; line-height: 1; display: block; }}
-  .big-score.good .num {{ color: var(--good); }}
-  .big-score.mid .num {{ color: var(--mid); }}
-  .big-score.low .num {{ color: var(--low); }}
-  .lvl-tag {{ font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono'; }}
-
-  .dim-block {{ border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }}
-  .dim-block summary {{ list-style: none; cursor: pointer; display: flex; justify-content: space-between;
-                        align-items: center; padding: 14px 18px; background: var(--panel-2); }}
-  .dim-block summary::-webkit-details-marker {{ display: none; }}
-  .dim-block summary:hover {{ background: #141b25; }}
-  .d-name {{ font-weight: 700; font-size: 15px; }}
-  .d-score {{ font-family: 'JetBrains Mono'; font-weight: 800; font-size: 18px; }}
-  .d-score.good {{ color: var(--good); }} .d-score.mid {{ color: var(--mid); }} .d-score.low {{ color: var(--low); }}
-  .findings {{ padding: 8px 18px 16px; }}
-  .finding {{ padding: 12px 0; border-bottom: 1px dashed var(--line); }}
-  .finding:last-child {{ border-bottom: none; }}
-  .f-head {{ display: flex; justify-content: space-between; font-size: 14px; }}
-  .f-label {{ font-weight: 500; }}
-  .f-score {{ font-family: 'JetBrains Mono'; color: var(--ink-dim); font-size: 12px; }}
-  .f-bar {{ height: 5px; background: var(--line); border-radius: 3px; margin: 7px 0; overflow: hidden; }}
-  .f-bar i {{ display: block; height: 100%; border-radius: 3px; }}
-  .finding.good .f-bar i {{ background: var(--good); }}
-  .finding.mid .f-bar i {{ background: var(--mid); }}
-  .finding.low .f-bar i {{ background: var(--low); }}
-  .f-detail {{ font-size: 12.5px; color: var(--ink-dim); }}
-
-  .blind {{ margin-top: 16px; font-size: 13px; color: var(--ink-dim); background: rgba(56,189,248,.06);
-            border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 0 8px 8px 0; }}
-  .blind span {{ font-family: 'JetBrains Mono'; color: var(--accent); font-weight: 700; margin-right: 8px;
-                 text-transform: uppercase; font-size: 11px; letter-spacing: .1em; }}
-
-  footer {{ text-align: center; color: var(--ink-dim); font-size: 12px; margin-top: 40px;
-            font-family: 'JetBrains Mono'; }}
-</style>
-</head>
-<body>
+    return _scaffold_html(
+        lang=lang,
+        title=_t(lang, "title_scan"),
+        body=f"""
   <div class="wrap">
     <header class="masthead">
       <div class="kicker">{_t(lang,"kicker_scan")}</div>
@@ -568,9 +443,17 @@ def build_html(data, session_data=None, lang="en"):
     {details}
 
     <footer>{_t(lang,"footer_scan")}</footer>
-  </div>
-</body>
-</html>"""
+  </div>""",
+        extra_css="")
+
+
+def _level_scale_item(threshold: int, lang: str) -> str:
+    """Render one level chip in the maturity scale strip."""
+    label = _level_label(threshold, lang)
+    head = label.split("·")[0].strip() if "·" in label else label
+    tail = label.split("·")[1].strip() if "·" in label else ""
+    return (f'<div class="lv"><b>{head}</b><span>{tail}</span>'
+            f'<i>{threshold}+</i></div>')
 
 
 def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0):
@@ -578,8 +461,6 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
 
     iteration 維度的 usage 為 None,usage polygon 以開口形式繞過 iteration
     軸,避免假裝 0 分。
-
-    viewBox 預留 pad 給軸標籤,避免中文標籤被截掉 (與 radar_svg 同策略)。
     """
     pad = 70
     vb = size + pad * 2
@@ -591,7 +472,6 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
     parts = [f'<svg viewBox="0 0 {vb} {vb}" xmlns="http://www.w3.org/2000/svg" '
              f'role="img" class="radar">']
 
-    # 同心格線
     for ring in range(1, rings + 1):
         rr = radius * ring / rings
         pts = []
@@ -600,7 +480,6 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
             pts.append(f"{cx + rr*math.cos(ang):.1f},{cy + rr*math.sin(ang):.1f}")
         parts.append(f'<polygon points="{" ".join(pts)}" class="grid-ring"/>')
 
-    # 軸線 + 標籤
     iteration_idx = None
     for i, key in enumerate(dim_keys):
         if key == "iteration":
@@ -619,11 +498,9 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
             f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="{anchor}" '
             f'class="axis-label" dominant-baseline="middle">{label}</text>')
 
-    # 每個 target 兩條多邊形 (config 實線 + usage 虛線)
     for ti, t in enumerate(merged_targets):
         color = PALETTE[(ti + idx_offset) % len(PALETTE)]
 
-        # config polygon (closed, solid)
         cfg_pts = []
         for i, key in enumerate(dim_keys):
             v = t["scores"][key]["config"]
@@ -638,7 +515,6 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
             x, y = _polar_point(cx, cy, radius, v, i, n)
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="{color}"/>')
 
-        # usage polyline (open through vertices where value is not None)
         usage_pts = []
         for i, key in enumerate(dim_keys):
             v = t["scores"][key]["usage"]
@@ -647,7 +523,6 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
             x, y = _polar_point(cx, cy, radius, v, i, n)
             usage_pts.append(f"{x:.1f},{y:.1f}")
         if len(usage_pts) >= 2:
-            # closed only if iteration is absent (i.e., all dims have usage)
             shape_tag = "polygon" if iteration_idx is None else "polyline"
             parts.append(
                 f'<{shape_tag} points="{" ".join(usage_pts)}" fill="none" '
@@ -662,7 +537,6 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
                 f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="none" '
                 f'stroke="{color}" stroke-width="1.6"/>')
 
-    # iteration 軸標 N/A
     if iteration_idx is not None:
         ang = -math.pi / 2 + (2 * math.pi * iteration_idx / n)
         nx = cx + (radius * 0.5) * math.cos(ang)
@@ -676,7 +550,6 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
 
 
 def _gap_pill(gap):
-    """落差數值 → 帶顏色的 pill。gap 為 None → '—'。"""
     if gap is None:
         return '<span class="pill mid">—</span>'
     cls = "good" if gap <= 15 else ("mid" if gap <= 35 else "low")
@@ -723,7 +596,7 @@ def top_gaps_html(merged_targets, lang="en"):
       <li class="gap-item">
         <div class="gap-rank">{i+1}</div>
         <div class="gap-body">
-          <div class="gap-hint">{g['hint']}</div>
+          <div class="gap-hint">{_hint_text(g, lang)}</div>
           <div class="gap-meta">
             <span>{g['target']}</span>
             <span>{_t(lang,"gap_meta_config")}<b>{g['config']:.0f}</b></span>
@@ -747,8 +620,8 @@ def merged_findings_html(target, dim_labels, lang="en"):
     use_by = target.get("usage_findings_by_dim", {})
     blocks = []
     for dim, scores in target["scores"].items():
-        cfg_rows = "".join(_finding_row(f) for f in cfg_by.get(dim, []))
-        use_rows = "".join(_finding_row(f) for f in use_by.get(dim, []))
+        cfg_rows = "".join(_finding_row(f, lang) for f in cfg_by.get(dim, []))
+        use_rows = "".join(_finding_row(f, lang) for f in use_by.get(dim, []))
         tone_cfg = "good" if scores["config"] >= 60 else ("mid" if scores["config"] >= 30 else "low")
         usage_label = (f'{scores["usage"]:.0f}' if scores["usage"] is not None else "N/A")
         tone_use = "good" if (scores["usage"] or 0) >= 60 else ("mid" if (scores["usage"] or 0) >= 30 else "low")
@@ -780,7 +653,7 @@ def merged_findings_html(target, dim_labels, lang="en"):
     return "".join(blocks)
 
 
-def _finding_row(f):
+def _finding_row(f: dict, lang: str) -> str:
     weight = f.get("weight") or 0
     score = f.get("score") or 0
     ratio = (score / weight) if weight else 0
@@ -788,15 +661,113 @@ def _finding_row(f):
     return f"""
       <div class="finding {state}">
         <div class="f-head">
-          <span class="f-label">{f.get('label','')}</span>
+          <span class="f-label">{_finding_label(f, lang)}</span>
           <span class="f-score">{score:.0f}/{weight:.0f}</span>
         </div>
         <div class="f-bar"><i style="width:{ratio*100:.0f}%"></i></div>
-        <div class="f-detail">{f.get('detail','')}</div>
+        <div class="f-detail">{_finding_detail(f, lang)}</div>
       </div>"""
 
 
-# ----- additional CSS injected into the dual-radar page --------------------
+# ----- shared HTML scaffolding ---------------------------------------------
+
+_BASE_CSS = """
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0b0f14; --panel: #121821; --panel-2: #0f141b; --line: #1f2a37;
+    --ink: #e4ecf4; --ink-dim: #8195a9; --good: #4ade80; --mid: #fbbf24;
+    --low: #f87171; --accent: #38bdf8;
+  }
+  body {
+    background:
+      radial-gradient(900px 600px at 80% -10%, rgba(56,189,248,.08), transparent),
+      radial-gradient(700px 500px at 0% 100%, rgba(74,222,128,.06), transparent),
+      var(--bg);
+    color: var(--ink); font-family: 'Noto Sans TC', system-ui, sans-serif;
+    line-height: 1.6; padding: 48px 20px 80px; min-height: 100vh;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .masthead { margin-bottom: 36px; }
+  .kicker { font-family: 'JetBrains Mono', monospace; font-size: 12px;
+            letter-spacing: .28em; color: var(--accent); text-transform: uppercase;
+            margin-bottom: 12px; }
+  h1 { font-size: clamp(28px, 5vw, 46px); font-weight: 900; line-height: 1.1; letter-spacing: -.02em; }
+  h1 .em { color: var(--accent); }
+  .sub { color: var(--ink-dim); margin-top: 14px; max-width: 64ch; font-size: 15px; }
+  .card { background: linear-gradient(180deg, var(--panel), var(--panel-2));
+          border: 1px solid var(--line); border-radius: 16px; padding: 28px;
+          margin-bottom: 22px; }
+  h2 { font-size: 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+  h2::before { content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
+  .card-sub { color: var(--ink-dim); font-size: 13.5px; max-width: 70ch; margin: -8px 0 18px; }
+  .radar-wrap { display: grid; grid-template-columns: 1.1fr .9fr; gap: 24px; align-items: center; }
+  @media (max-width: 760px) { .radar-wrap { grid-template-columns: 1fr; } }
+  .radar { width: 100%; height: auto; }
+  .grid-ring { fill: none; stroke: var(--line); stroke-width: 1; }
+  .axis { stroke: var(--line); stroke-width: 1; }
+  .axis-label { fill: var(--ink-dim); font-size: 12.5px; font-family: 'Noto Sans TC'; font-weight: 500; }
+  .series { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 40%, transparent)); }
+  .legend { display: flex; flex-direction: column; gap: 10px; }
+  .leg { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-dim); }
+  .leg i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+  .leg b { margin-left: auto; color: var(--ink); font-family: 'JetBrains Mono'; }
+  .scale { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; }
+  .lv { flex: 1; min-width: 110px; background: var(--panel-2); border: 1px solid var(--line);
+        border-radius: 10px; padding: 10px 12px; }
+  .lv b { display: block; font-family: 'JetBrains Mono'; color: var(--accent); font-size: 13px; }
+  .lv span { display: block; font-size: 12px; color: var(--ink-dim); }
+  .lv i { font-style: normal; font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono'; }
+  .rank-table { width: 100%; border-collapse: collapse; }
+  .rank-table th { text-align: left; font-size: 12px; color: var(--ink-dim); font-weight: 500;
+                   padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .rank-table td { padding: 12px 10px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .rank-table .rank { font-family: 'JetBrains Mono'; color: var(--ink-dim); width: 36px; }
+  .lvl { font-size: 12px; color: var(--ink-dim); }
+  .pill { font-family: 'JetBrains Mono'; font-weight: 700; padding: 3px 10px; border-radius: 999px; font-size: 13px; }
+  .pill.good { background: rgba(74,222,128,.15); color: var(--good); }
+  .pill.mid { background: rgba(251,191,36,.15); color: var(--mid); }
+  .pill.low { background: rgba(248,113,113,.15); color: var(--low); }
+  .team-avg { margin-top: 16px; color: var(--ink-dim); font-size: 14px; }
+  .team-avg b { color: var(--ink); font-family: 'JetBrains Mono'; font-size: 18px; }
+  .target-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+                 margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .target-head h3 { font-size: 20px; }
+  .path { font-family: 'JetBrains Mono'; font-size: 11.5px; color: var(--ink-dim); word-break: break-all; }
+  .big-score { text-align: right; min-width: 110px; }
+  .big-score .num { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 40px; line-height: 1; display: block; }
+  .big-score.good .num { color: var(--good); }
+  .big-score.mid .num { color: var(--mid); }
+  .big-score.low .num { color: var(--low); }
+  .lvl-tag { font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono'; }
+  .dim-block { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+  .dim-block summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between;
+                       align-items: center; padding: 14px 18px; background: var(--panel-2); }
+  .dim-block summary::-webkit-details-marker { display: none; }
+  .dim-block summary:hover { background: #141b25; }
+  .d-name { font-weight: 700; font-size: 15px; }
+  .d-score { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 18px; }
+  .d-score.good { color: var(--good); } .d-score.mid { color: var(--mid); } .d-score.low { color: var(--low); }
+  .findings { padding: 8px 18px 16px; }
+  .finding { padding: 12px 0; border-bottom: 1px dashed var(--line); }
+  .finding:last-child { border-bottom: none; }
+  .f-head { display: flex; justify-content: space-between; font-size: 14px; }
+  .f-label { font-weight: 500; }
+  .f-score { font-family: 'JetBrains Mono'; color: var(--ink-dim); font-size: 12px; }
+  .f-bar { height: 5px; background: var(--line); border-radius: 3px; margin: 7px 0; overflow: hidden; }
+  .f-bar i { display: block; height: 100%; border-radius: 3px; }
+  .finding.good .f-bar i { background: var(--good); }
+  .finding.mid .f-bar i { background: var(--mid); }
+  .finding.low .f-bar i { background: var(--low); }
+  .f-detail { font-size: 12.5px; color: var(--ink-dim); }
+  .blind { margin-top: 16px; font-size: 13px; color: var(--ink-dim); background: rgba(56,189,248,.06);
+           border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 0 8px 8px 0; }
+  .blind span { font-family: 'JetBrains Mono'; color: var(--accent); font-weight: 700; margin-right: 8px;
+                text-transform: uppercase; font-size: 11px; letter-spacing: .1em; }
+  footer { text-align: center; color: var(--ink-dim); font-size: 12px; margin-top: 40px;
+           font-family: 'JetBrains Mono'; }
+"""
+
 
 _MERGED_EXTRA_CSS = """
   .usage-series { stroke-linejoin: round; stroke-linecap: round; }
@@ -838,10 +809,25 @@ _MERGED_EXTRA_CSS = """
 """
 
 
+def _scaffold_html(lang: str, title: str, body: str, extra_css: str = "") -> str:
+    """Common <html>…</html> wrapper used by both scan and merged reports."""
+    return f"""<!DOCTYPE html>
+<html lang="{_t(lang,"html_lang")}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<style>{_BASE_CSS}{extra_css}</style>
+</head>
+<body>{body}
+</body>
+</html>"""
+
+
 def build_merged_html(merged, lang="en"):
     """Render the dual-track (config vs usage) report."""
-    dim_keys = list(merged["dimensions"].keys())
-    dim_labels = _dim_labels(merged["dimensions"], lang)
+    dim_keys = _normalise_dimensions(merged["dimensions"])
+    dim_labels = i18n_mod.dimensions_for(dim_keys, lang)
     targets = merged["targets"]
 
     if not targets:
@@ -869,7 +855,6 @@ def build_merged_html(merged, lang="en"):
         f'<span class="swatch">{_t(lang,"dual_legend_na")}</span>'
         '</div>')
 
-    # gap section per target
     target_sections = "".join(f"""
       <section class="card target">
         <div class="target-head">
@@ -879,116 +864,22 @@ def build_merged_html(merged, lang="en"):
           </div>
           <div class="big-score {('good' if (t['config_overall'] or 0)>=60 else 'mid' if (t['config_overall'] or 0)>=30 else 'low')}">
             <span class="num">{(t['config_overall'] or 0):.0f}</span>
-            <span class="lvl-tag">{t.get('level','')}</span>
+            <span class="lvl-tag">{_level_label(t.get('level_threshold', 0), lang)}</span>
           </div>
         </div>
         {gap_table_html(t, dim_labels, lang=lang)}
         <div style="margin-top: 18px;">{merged_findings_html(t, dim_labels, lang=lang)}</div>
-        {"".join(f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{b}</p>' for b in t.get('blind_spots', []))}
+        {"".join(f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{_blind_text(b, lang)}</p>' for b in t.get('blind_spots', []))}
         {"".join(f'<p class="blind"><span>{_t(lang,"note_label")}</span>{n}</p>' for n in t.get('notes', []))}
       </section>""" for t in targets)
 
+    level_thresholds = merged.get("level_thresholds")
+    if level_thresholds is None:
+        level_thresholds = [th for th, _ in i18n_mod.LEVELS]
     level_scale = "".join(
-        f'<div class="lv"><b>{lbl.split("·")[0].strip()}</b>'
-        f'<span>{lbl.split("·")[1].strip() if "·" in lbl else ""}</span>'
-        f'<i>{th}+</i></div>'
-        for th, lbl in _levels(merged.get("levels", []), lang))
+        _level_scale_item(th, lang) for th in level_thresholds)
 
-    return f"""<!DOCTYPE html>
-<html lang="{_t(lang,"html_lang")}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{_t(lang,"title_merged")}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  :root {{
-    --bg: #0b0f14; --panel: #121821; --panel-2: #0f141b; --line: #1f2a37;
-    --ink: #e4ecf4; --ink-dim: #8195a9; --good: #4ade80; --mid: #fbbf24;
-    --low: #f87171; --accent: #38bdf8;
-  }}
-  body {{
-    background:
-      radial-gradient(900px 600px at 80% -10%, rgba(56,189,248,.08), transparent),
-      radial-gradient(700px 500px at 0% 100%, rgba(74,222,128,.06), transparent),
-      var(--bg);
-    color: var(--ink); font-family: 'Noto Sans TC', system-ui, sans-serif;
-    line-height: 1.6; padding: 48px 20px 80px; min-height: 100vh;
-  }}
-  .wrap {{ max-width: 1080px; margin: 0 auto; }}
-  .masthead {{ margin-bottom: 36px; }}
-  .kicker {{ font-family: 'JetBrains Mono', monospace; font-size: 12px;
-             letter-spacing: .28em; color: var(--accent); text-transform: uppercase;
-             margin-bottom: 12px; }}
-  h1 {{ font-size: clamp(28px, 5vw, 46px); font-weight: 900; line-height: 1.1; letter-spacing: -.02em; }}
-  h1 .em {{ color: var(--accent); }}
-  .sub {{ color: var(--ink-dim); margin-top: 14px; max-width: 64ch; font-size: 15px; }}
-  .card {{ background: linear-gradient(180deg, var(--panel), var(--panel-2));
-           border: 1px solid var(--line); border-radius: 16px; padding: 28px;
-           margin-bottom: 22px; }}
-  h2 {{ font-size: 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }}
-  h2::before {{ content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }}
-  .card-sub {{ color: var(--ink-dim); font-size: 13.5px; max-width: 70ch; margin: -8px 0 18px; }}
-  .radar-wrap {{ display: grid; grid-template-columns: 1.1fr .9fr; gap: 24px; align-items: center; }}
-  @media (max-width: 760px) {{ .radar-wrap {{ grid-template-columns: 1fr; }} }}
-  .radar {{ width: 100%; height: auto; }}
-  .grid-ring {{ fill: none; stroke: var(--line); stroke-width: 1; }}
-  .axis {{ stroke: var(--line); stroke-width: 1; }}
-  .axis-label {{ fill: var(--ink-dim); font-size: 12.5px; font-family: 'Noto Sans TC'; font-weight: 500; }}
-  .series {{ filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 40%, transparent)); }}
-  .legend {{ display: flex; flex-direction: column; gap: 10px; }}
-  .leg {{ display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-dim); }}
-  .leg i {{ width: 14px; height: 14px; border-radius: 4px; display: inline-block; }}
-  .leg b {{ margin-left: auto; color: var(--ink); font-family: 'JetBrains Mono'; }}
-  .scale {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; }}
-  .lv {{ flex: 1; min-width: 110px; background: var(--panel-2); border: 1px solid var(--line);
-         border-radius: 10px; padding: 10px 12px; }}
-  .lv b {{ display: block; font-family: 'JetBrains Mono'; color: var(--accent); font-size: 13px; }}
-  .lv span {{ display: block; font-size: 12px; color: var(--ink-dim); }}
-  .lv i {{ font-style: normal; font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono'; }}
-  .pill {{ font-family: 'JetBrains Mono'; font-weight: 700; padding: 3px 10px;
-           border-radius: 999px; font-size: 13px; }}
-  .pill.good {{ background: rgba(74,222,128,.15); color: var(--good); }}
-  .pill.mid  {{ background: rgba(251,191,36,.15); color: var(--mid); }}
-  .pill.low  {{ background: rgba(248,113,113,.15); color: var(--low); }}
-  .target-head {{ display: flex; justify-content: space-between; align-items: flex-start;
-                  gap: 16px; margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }}
-  .target-head h3 {{ font-size: 20px; }}
-  .path {{ font-family: 'JetBrains Mono'; font-size: 11.5px; color: var(--ink-dim); word-break: break-all; }}
-  .big-score {{ text-align: right; min-width: 110px; }}
-  .big-score .num {{ font-family: 'JetBrains Mono'; font-weight: 800; font-size: 40px; line-height: 1; display: block; }}
-  .big-score.good .num {{ color: var(--good); }} .big-score.mid .num {{ color: var(--mid); }} .big-score.low .num {{ color: var(--low); }}
-  .lvl-tag {{ font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono'; }}
-  .dim-block {{ border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }}
-  .dim-block summary {{ list-style: none; cursor: pointer; display: flex; justify-content: space-between;
-                        align-items: center; padding: 14px 18px; background: var(--panel-2); }}
-  .dim-block summary::-webkit-details-marker {{ display: none; }}
-  .dim-block summary:hover {{ background: #141b25; }}
-  .d-name {{ font-weight: 700; font-size: 15px; }}
-  .d-score {{ font-family: 'JetBrains Mono'; font-weight: 800; font-size: 18px; }}
-  .d-score.good {{ color: var(--good); }} .d-score.mid {{ color: var(--mid); }} .d-score.low {{ color: var(--low); }}
-  .finding {{ padding: 12px 0; border-bottom: 1px dashed var(--line); }}
-  .finding:last-child {{ border-bottom: none; }}
-  .f-head {{ display: flex; justify-content: space-between; font-size: 14px; }}
-  .f-label {{ font-weight: 500; }}
-  .f-score {{ font-family: 'JetBrains Mono'; color: var(--ink-dim); font-size: 12px; }}
-  .f-bar {{ height: 5px; background: var(--line); border-radius: 3px; margin: 7px 0; overflow: hidden; }}
-  .f-bar i {{ display: block; height: 100%; border-radius: 3px; }}
-  .finding.good .f-bar i {{ background: var(--good); }}
-  .finding.mid  .f-bar i {{ background: var(--mid); }}
-  .finding.low  .f-bar i {{ background: var(--low); }}
-  .f-detail {{ font-size: 12.5px; color: var(--ink-dim); }}
-  .blind {{ margin-top: 16px; font-size: 13px; color: var(--ink-dim); background: rgba(56,189,248,.06);
-            border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 0 8px 8px 0; }}
-  .blind span {{ font-family: 'JetBrains Mono'; color: var(--accent); font-weight: 700;
-                 margin-right: 8px; text-transform: uppercase; font-size: 11px; letter-spacing: .1em; }}
-  footer {{ text-align: center; color: var(--ink-dim); font-size: 12px; margin-top: 40px;
-            font-family: 'JetBrains Mono'; }}
-  {_MERGED_EXTRA_CSS}
-</style>
-</head>
-<body>
+    body = f"""
   <div class="wrap">
     <header class="masthead">
       <div class="kicker">{_t(lang,"kicker_merged")}</div>
@@ -1011,9 +902,10 @@ def build_merged_html(merged, lang="en"):
     {target_sections}
 
     <footer>{_t(lang,"footer_merged")}</footer>
-  </div>
-</body>
-</html>"""
+  </div>"""
+
+    return _scaffold_html(lang=lang, title=_t(lang, "title_merged"),
+                          body=body, extra_css=_MERGED_EXTRA_CSS)
 
 
 def _prompt_lang():

@@ -1,18 +1,18 @@
 {
-  "dimensions": {
-    "claude_md": "CLAUDE.md 成熟度",
-    "skills": "Skills 運用",
-    "mcp": "MCP 整合",
-    "automation": "自動化",
-    "context_hygiene": "情境衛生",
-    "iteration": "迭代與維護"
-  },
-  "levels": [
-    [0, "L0 · 未使用 (Unaware)"],
-    [20, "L1 · 萌芽 (Reactive)"],
-    [40, "L2 · 結構化 (Structured)"],
-    [60, "L3 · 進階 (Advanced)"],
-    [80, "L4 · 精煉 (Mastery)"]
+  "dimensions": [
+    "claude_md",
+    "skills",
+    "mcp",
+    "automation",
+    "context_hygiene",
+    "iteration"
+  ],
+  "level_thresholds": [
+    0,
+    20,
+    40,
+    60,
+    80
   ],
   "targets": [
     {
@@ -20,44 +20,427 @@
       "path": "D:\\project\\agent-radar",
       "is_home": false,
       "findings": [
-        {"dimension": "claude_md", "label": "CLAUDE.md 存在", "weight": 25, "score": 25, "detail": "找到 CLAUDE.md"},
-        {"dimension": "claude_md", "label": "結構化分區", "weight": 20, "score": 18, "detail": "5 個標題, 命中 4 個分區關鍵字"},
-        {"dimension": "claude_md", "label": "指令式語氣", "weight": 15, "score": 12, "detail": "8 處規範語句"},
-        {"dimension": "claude_md", "label": "精簡度", "weight": 15, "score": 15, "detail": "黃金區間"},
-        {"dimension": "claude_md", "label": "@import 引用", "weight": 10, "score": 10, "detail": "2 處 @ 引用"},
-        {"dimension": "claude_md", "label": "Lint: 大小合理", "weight": 15, "score": 15, "detail": "2345 chars (合規)"},
-
-        {"dimension": "skills", "label": "Skills 存在", "weight": 35, "score": 35, "detail": "找到 6 個 SKILL.md"},
-        {"dimension": "skills", "label": "description 品質", "weight": 35, "score": 28, "detail": "description 平均品質佳"},
-        {"dimension": "skills", "label": "Progressive disclosure", "weight": 30, "score": 24, "detail": "主檔精簡 + 附屬檔拆分"},
-        {"dimension": "skills", "label": "Lint: frontmatter & token 衛生", "weight": 20, "score": 18, "detail": "frontmatter 合規 6/6"},
-
-        {"dimension": "mcp", "label": "MCP server 數量", "weight": 50, "score": 50, "detail": "4 個 MCP server"},
-        {"dimension": "mcp", "label": "MCP 類型廣度", "weight": 50, "score": 51, "detail": "涵蓋類別: data, saas, search"},
-
-        {"dimension": "automation", "label": "Hooks", "weight": 30, "score": 30, "detail": "偵測到 hooks 設定"},
-        {"dimension": "automation", "label": "Subagents", "weight": 30, "score": 30, "detail": "3 個 subagent"},
-        {"dimension": "automation", "label": "自訂 slash commands", "weight": 25, "score": 25, "detail": "5 個自訂命令"},
-        {"dimension": "automation", "label": "Plugins", "weight": 15, "score": 15, "detail": "偵測到 plugin 使用"},
-
-        {"dimension": "context_hygiene", "label": "User/Project 分工", "weight": 40, "score": 40, "detail": "同時具備 project 與 user-space 設定"},
-        {"dimension": "context_hygiene", "label": "共享/個人設定區分", "weight": 30, "score": 30, "detail": "settings.local.json 已 gitignore"},
-        {"dimension": "context_hygiene", "label": "模組化引用", "weight": 30, "score": 30, "detail": "2 處模組化引用"},
-
-        {"dimension": "iteration", "label": "設定檔 git 迭代", "weight": 60, "score": 48, "detail": "設定相關 commit 6 次"},
-        {"dimension": "iteration", "label": "設定檔多樣性", "weight": 40, "score": 28, "detail": "曾迭代 2 類設定檔"}
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.exists",
+          "weight": 25,
+          "score": 25,
+          "detail_key": "scan.claude_md.exists.found",
+          "detail_args": {
+            "paths": "CLAUDE.md"
+          }
+        },
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.structure",
+          "weight": 20,
+          "score": 20,
+          "detail_key": "scan.claude_md.structure.detail",
+          "detail_args": {
+            "headers": 5,
+            "hints": 1
+          }
+        },
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.imperative",
+          "weight": 15,
+          "score": 4.5,
+          "detail_key": "scan.claude_md.imperative.detail",
+          "detail_args": {
+            "hits": 3
+          }
+        },
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.concise",
+          "weight": 15,
+          "score": 15,
+          "detail_key": "scan.claude_md.concise.detail",
+          "detail_args": {
+            "words": 358
+          }
+        },
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.import",
+          "weight": 10,
+          "score": 0,
+          "detail_key": "scan.claude_md.import.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.lint_size",
+          "weight": 15,
+          "score": 15,
+          "detail_key": "scan.claude_md.lint_size.ok",
+          "detail_args": {
+            "chars": 2345
+          }
+        },
+        {
+          "dimension": "skills",
+          "label_key": "scan.skills.exists",
+          "weight": 35,
+          "score": 0,
+          "detail_key": "scan.skills.exists.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "skills",
+          "label_key": "scan.skills.description",
+          "weight": 35,
+          "score": 0,
+          "detail_key": "scan.skills.placeholder",
+          "detail_args": {}
+        },
+        {
+          "dimension": "skills",
+          "label_key": "scan.skills.progressive",
+          "weight": 30,
+          "score": 0,
+          "detail_key": "scan.skills.placeholder",
+          "detail_args": {}
+        },
+        {
+          "dimension": "skills",
+          "label_key": "scan.skills.lint_hygiene",
+          "weight": 20,
+          "score": 0,
+          "detail_key": "scan.skills.placeholder",
+          "detail_args": {}
+        },
+        {
+          "dimension": "mcp",
+          "label_key": "scan.mcp.server_count",
+          "weight": 50,
+          "score": 0,
+          "detail_key": "scan.mcp.server_count.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "mcp",
+          "label_key": "scan.mcp.category_breadth",
+          "weight": 50,
+          "score": 0,
+          "detail_key": "scan.mcp.category_breadth.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "automation",
+          "label_key": "scan.automation.hooks",
+          "weight": 30,
+          "score": 0,
+          "detail_key": "scan.automation.hooks.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "automation",
+          "label_key": "scan.automation.subagents",
+          "weight": 30,
+          "score": 0,
+          "detail_key": "scan.automation.subagents.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "automation",
+          "label_key": "scan.automation.commands",
+          "weight": 25,
+          "score": 0,
+          "detail_key": "scan.automation.commands.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "automation",
+          "label_key": "scan.automation.plugins",
+          "weight": 15,
+          "score": 0,
+          "detail_key": "scan.automation.plugins.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "context_hygiene",
+          "label_key": "scan.context.split",
+          "weight": 40,
+          "score": 40,
+          "detail_key": "scan.context.split.full",
+          "detail_args": {}
+        },
+        {
+          "dimension": "context_hygiene",
+          "label_key": "scan.context.shared_personal",
+          "weight": 30,
+          "score": 30,
+          "detail_key": "scan.context.shared_personal.ok",
+          "detail_args": {}
+        },
+        {
+          "dimension": "context_hygiene",
+          "label_key": "scan.context.modular",
+          "weight": 30,
+          "score": 0,
+          "detail_key": "scan.context.modular.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "iteration",
+          "label_key": "scan.iteration.git",
+          "weight": 60,
+          "score": 8,
+          "detail_key": "scan.iteration.git.detail",
+          "detail_args": {
+            "parts": "CLAUDE.md=1",
+            "counts": {
+              "CLAUDE.md": 1,
+              ".claude/": 0,
+              ".mcp.json": 0
+            }
+          }
+        },
+        {
+          "dimension": "iteration",
+          "label_key": "scan.iteration.diversity",
+          "weight": 40,
+          "score": 14,
+          "detail_key": "scan.iteration.diversity.detail",
+          "detail_args": {
+            "n": 1
+          }
+        }
       ],
       "scores": {
-        "claude_md": 91.4,
-        "skills": 86.4,
-        "mcp": 100.0,
-        "automation": 100.0,
-        "context_hygiene": 100.0,
-        "iteration": 76.0
+        "claude_md": 79.5,
+        "skills": 0.0,
+        "mcp": 0.0,
+        "automation": 0.0,
+        "context_hygiene": 70.0,
+        "iteration": 22.0
       },
-      "overall": 92.5,
-      "level": "L4 · 精煉 (Mastery)",
+      "overall": 28.6,
+      "level_threshold": 20,
       "blind_spots": []
+    },
+    {
+      "name": "~ (user-space)",
+      "path": "C:\\Users\\millerlai",
+      "is_home": true,
+      "findings": [
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.exists",
+          "weight": 25,
+          "score": 25,
+          "detail_key": "scan.claude_md.exists.found",
+          "detail_args": {
+            "paths": ".claude\\CLAUDE.md"
+          }
+        },
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.structure",
+          "weight": 20,
+          "score": 20,
+          "detail_key": "scan.claude_md.structure.detail",
+          "detail_args": {
+            "headers": 7,
+            "hints": 6
+          }
+        },
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.imperative",
+          "weight": 15,
+          "score": 10.5,
+          "detail_key": "scan.claude_md.imperative.detail",
+          "detail_args": {
+            "hits": 7
+          }
+        },
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.concise",
+          "weight": 15,
+          "score": 15,
+          "detail_key": "scan.claude_md.concise.detail",
+          "detail_args": {
+            "words": 212
+          }
+        },
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.import",
+          "weight": 10,
+          "score": 0,
+          "detail_key": "scan.claude_md.import.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "claude_md",
+          "label_key": "scan.claude_md.lint_size",
+          "weight": 15,
+          "score": 15,
+          "detail_key": "scan.claude_md.lint_size.ok",
+          "detail_args": {
+            "chars": 1279
+          }
+        },
+        {
+          "dimension": "skills",
+          "label_key": "scan.skills.exists",
+          "weight": 35,
+          "score": 35,
+          "detail_key": "scan.skills.exists.have",
+          "detail_args": {
+            "n": 145
+          }
+        },
+        {
+          "dimension": "skills",
+          "label_key": "scan.skills.description",
+          "weight": 35,
+          "score": 0.399999999999999,
+          "detail_key": "scan.skills.description.detail",
+          "detail_args": {}
+        },
+        {
+          "dimension": "skills",
+          "label_key": "scan.skills.progressive",
+          "weight": 30,
+          "score": 30,
+          "detail_key": "scan.skills.progressive.detail",
+          "detail_args": {}
+        },
+        {
+          "dimension": "skills",
+          "label_key": "scan.skills.lint_hygiene",
+          "weight": 20,
+          "score": 0,
+          "detail_key": "scan.skills.lint.detail",
+          "detail_args": {
+            "fm": 145,
+            "n": 145,
+            "_suffixes": [
+              [
+                "scan.skills.lint.decor_suffix",
+                {
+                  "n": 82
+                }
+              ],
+              [
+                "scan.skills.lint.oversize_suffix",
+                {
+                  "n": 114.0
+                }
+              ]
+            ]
+          }
+        },
+        {
+          "dimension": "mcp",
+          "label_key": "scan.mcp.server_count",
+          "weight": 50,
+          "score": 0,
+          "detail_key": "scan.mcp.server_count.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "mcp",
+          "label_key": "scan.mcp.category_breadth",
+          "weight": 50,
+          "score": 0,
+          "detail_key": "scan.mcp.category_breadth.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "automation",
+          "label_key": "scan.automation.hooks",
+          "weight": 30,
+          "score": 0,
+          "detail_key": "scan.automation.hooks.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "automation",
+          "label_key": "scan.automation.subagents",
+          "weight": 30,
+          "score": 0,
+          "detail_key": "scan.automation.subagents.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "automation",
+          "label_key": "scan.automation.commands",
+          "weight": 25,
+          "score": 0,
+          "detail_key": "scan.automation.commands.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "automation",
+          "label_key": "scan.automation.plugins",
+          "weight": 15,
+          "score": 15,
+          "detail_key": "scan.automation.plugins.have",
+          "detail_args": {}
+        },
+        {
+          "dimension": "context_hygiene",
+          "label_key": "scan.context.split",
+          "weight": 40,
+          "score": 40,
+          "detail_key": "scan.context.split.full",
+          "detail_args": {}
+        },
+        {
+          "dimension": "context_hygiene",
+          "label_key": "scan.context.shared_personal",
+          "weight": 30,
+          "score": 0,
+          "detail_key": "scan.context.shared_personal.no",
+          "detail_args": {}
+        },
+        {
+          "dimension": "context_hygiene",
+          "label_key": "scan.context.modular",
+          "weight": 30,
+          "score": 0,
+          "detail_key": "scan.context.modular.none",
+          "detail_args": {}
+        },
+        {
+          "dimension": "iteration",
+          "label_key": "scan.iteration.git",
+          "weight": 60,
+          "score": 0,
+          "detail_key": "scan.iteration.non_git",
+          "detail_args": {}
+        },
+        {
+          "dimension": "iteration",
+          "label_key": "scan.iteration.diversity",
+          "weight": 40,
+          "score": 0,
+          "detail_key": "scan.iteration.non_git.short",
+          "detail_args": {}
+        }
+      ],
+      "scores": {
+        "claude_md": 85.5,
+        "skills": 54.5,
+        "mcp": 0.0,
+        "automation": 15.0,
+        "context_hygiene": 40.0,
+        "iteration": 0.0
+      },
+      "overall": 32.5,
+      "level_threshold": 20,
+      "blind_spots": [
+        {
+          "key": "scan.blind.config_only",
+          "args": {}
+        }
+      ]
     }
   ]
 }

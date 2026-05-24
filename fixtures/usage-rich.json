@@ -1,18 +1,13 @@
 {
-  "usage_dimensions": {
-    "claude_md": "CLAUDE.md 生效度 (間接)",
-    "skills": "Skills 運用",
-    "mcp": "MCP 運用",
-    "automation": "自動化運用",
-    "context_hygiene": "情境引用",
-    "iteration": "迭代與維護"
-  },
-  "scan_context": {
-    "servers_configured": 4,
-    "hooks_registered": 1,
-    "subagents_defined": 3,
-    "plugins_installed": 1
-  },
+  "usage_dimensions": [
+    "claude_md",
+    "skills",
+    "mcp",
+    "automation",
+    "context_hygiene",
+    "iteration"
+  ],
+  "scan_context": {},
   "account_filter": null,
   "targets_by_name": {
     "agent-radar": {
@@ -20,87 +15,137 @@
       "scores": {
         "claude_md": 80.0,
         "skills": 80.0,
-        "mcp": 50.0,
+        "mcp": 54.2,
         "automation": 100.0,
         "context_hygiene": 92.0,
         "iteration": null
       },
-      "overall": 80.4,
+      "overall": 81.2,
       "findings_by_dim": {
         "claude_md": [
           {
-            "label": "tool_decision 接受率 (間接)",
+            "label_key": "usage.claude_md.accept_rate",
             "weight": 100,
             "score": 80.0,
-            "detail": "8/10 工具提議被接受 (reject_ratio=20.0%)"
+            "detail_key": "usage.claude_md.accept_rate.detail",
+            "detail_args": {
+              "a": 8,
+              "t": 10,
+              "pct": 20.0
+            }
           }
         ],
         "skills": [
           {
-            "label": "Skill 觸發次數",
+            "label_key": "usage.skills.trigger_count",
             "weight": 40,
             "score": 40.0,
-            "detail": "4 次觸發 / 2 session (activation_rate=1.00)"
+            "detail_key": "usage.skills.trigger_count.detail",
+            "detail_args": {
+              "total": 4,
+              "sessions": 2,
+              "rate": 1.0
+            }
           },
           {
-            "label": "proactive 觸發比例",
+            "label_key": "usage.skills.proactive",
             "weight": 40,
             "score": 20.0,
-            "detail": "2/4 為模型主動觸發 (50%) — 反映 description 觸發力"
+            "detail_key": "usage.skills.proactive.detail",
+            "detail_args": {
+              "p": 2,
+              "t": 4,
+              "pct": 50.0
+            }
           },
           {
-            "label": "至少用過 1 個 skill",
+            "label_key": "usage.skills.at_least_one",
             "weight": 20,
             "score": 20.0,
-            "detail": "2 個 skill 被觸發過"
+            "detail_key": "usage.skills.at_least_one.detail",
+            "detail_args": {
+              "n": 2
+            }
           }
         ],
         "mcp": [
           {
-            "label": "連線健康度",
+            "label_key": "usage.mcp.health",
             "weight": 50,
             "score": 37.5,
-            "detail": "connected=3, failed=1 (health=75%)"
+            "detail_key": "usage.mcp.health.detail",
+            "detail_args": {
+              "c": 3,
+              "f": 1,
+              "pct": 75.0
+            }
           },
           {
-            "label": "被工具呼叫的 server 比例",
+            "label_key": "usage.mcp.used_ratio",
             "weight": 50,
-            "score": 12.5,
-            "detail": "1/4 server 曾被呼叫 (configured 由 scan.json 提供)"
+            "score": 16.7,
+            "detail_key": "usage.mcp.used_ratio.detail",
+            "detail_args": {
+              "invoked": 1,
+              "configured": 3,
+              "_suffixes": []
+            }
           }
         ],
         "automation": [
           {
-            "label": "Hook 觸發率",
+            "label_key": "usage.automation.hook_rate",
             "weight": 40,
             "score": 40.0,
-            "detail": "3/1 已執行的 hook (100%)"
+            "detail_key": "usage.automation.hook_rate.detail",
+            "detail_args": {
+              "e": 3,
+              "r": 3,
+              "pct": 100.0
+            }
           },
           {
-            "label": "Plugin 載入比例",
+            "label_key": "usage.automation.plugin_ratio",
             "weight": 35,
             "score": 35.0,
-            "detail": "2/1 plugin 載入 (100%)"
+            "detail_key": "usage.automation.plugin_ratio.detail",
+            "detail_args": {
+              "loaded": 2,
+              "installed": 2,
+              "pct": 100.0
+            }
           },
           {
-            "label": "Subagent 使用",
+            "label_key": "usage.automation.subagent",
             "weight": 25,
             "score": 25.0,
-            "detail": "2 種 subagent 被派遣"
+            "detail_key": "usage.automation.subagent.have",
+            "detail_args": {
+              "n": 2
+            }
           }
         ],
         "context_hygiene": [
           {
-            "label": "@ 引用頻率 (per session)",
+            "label_key": "usage.context.mention_rate",
             "weight": 60,
             "score": 60.0,
-            "detail": "4 次 @file 引用 / 2 session (rate=1.00)"
+            "detail_key": "usage.context.mention_rate.detail",
+            "detail_args": {
+              "count": 4,
+              "sessions": 2,
+              "rate": 1.0
+            }
           },
           {
-            "label": "@ 解析成功率",
+            "label_key": "usage.context.mention_success",
             "weight": 40,
             "score": 32.0,
-            "detail": "4/5 解析成功"
+            "detail_key": "usage.context.mention_success.detail",
+            "detail_args": {
+              "ok": 4,
+              "total": 5
+            }
           }
         ],
         "iteration": []
@@ -119,7 +164,7 @@
       "notes": [],
       "window": {
         "since": "1970-01-01T00:00:00+00:00",
-        "until": "2026-05-23T11:42:41.822915+00:00"
+        "until": "2026-05-24T07:48:58.359418+00:00"
       }
     }
   }

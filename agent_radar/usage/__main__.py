@@ -29,7 +29,7 @@ from pathlib import Path
 
 from .collectors.otlp_file import OTLPFileCollector
 from .merge import scan_context_for
-from .usage_score import USAGE_DIMENSIONS, score_window
+from .usage_score import USAGE_DIMENSION_KEYS, score_window
 
 
 def _parse_iso(value: str | None) -> datetime | None:
@@ -95,7 +95,7 @@ def main():
     scored = score_window(window, scan_context=scan_ctx)
 
     out = {
-        "usage_dimensions": USAGE_DIMENSIONS,
+        "usage_dimensions": USAGE_DIMENSION_KEYS,
         "scan_context": scan_ctx or {},
         "account_filter": args.account,
         "targets_by_name": {
