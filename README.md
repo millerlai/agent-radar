@@ -60,59 +60,53 @@ The total score maps onto five levels: L0 (unaware) → L4 (mastery).
 
 **Prerequisites**: Python 3.8+ (standard library only — zero external deps).
 
-### Option A · Install from PyPI / source (recommended)
+### Option A · Install from PyPI (recommended)
 
-Works with `pip`, `uv`, and `poetry`. After install, verify the command
-is on your `PATH`:
+The PyPI distribution name is **`claude-agent-radar`** (PyPI rejected
+the shorter `agent-radar` because of a name collision with an unrelated
+package). The CLI command and module are still `agent-radar` and
+`agent_radar` respectively.
 
-```bash
-agent-radar --help
-```
-
-If the verify step prints help, you're done. If it fails with
-`command not found`, see **"`agent-radar` not on PATH?"** below — the
-module form `python -m agent_radar` always works as a drop-in
-replacement.
+The two recommended install methods put `agent-radar.exe` on your
+`PATH` automatically — no manual edits needed.
 
 ```bash
-# pip (system / venv)
-pip install agent-radar
+# Recommended · pipx (works out-of-the-box on every OS)
+pipx install claude-agent-radar
 
-# pip --user (no admin needed; see PATH note below on Windows)
-pip install --user agent-radar
+# Recommended · uv tool (if you already use uv)
+uv tool install claude-agent-radar
 
-# uv
-uv pip install agent-radar
-# or, as a uv-managed tool (handles PATH for you)
-uv tool install agent-radar
+# Inside an activated virtualenv
+python -m venv .venv
+.venv\Scripts\activate           # Windows
+source .venv/bin/activate        # macOS / Linux
+pip install claude-agent-radar
 
-# pipx (isolated env, handles PATH for you — recommended on Windows)
-pipx install agent-radar
-
-# poetry
-poetry add agent-radar
-
-# Local / editable install while hacking on the source
-git clone <repo-url> agent-radar
+# Editable install while hacking on the source
+git clone https://github.com/millerlai/agent-radar
 cd agent-radar
 pip install -e .
+```
+
+After install, verify:
+
+```bash
 agent-radar --help
 ```
 
-#### `agent-radar` not on PATH?
+If `pipx` / `uv tool install` succeeded but `agent-radar` is still
+`command not found`, your shell hasn't picked up the tool-bin dir yet
+— run `pipx ensurepath` or `uv tool update-shell`, then reopen the
+shell.
 
-Two common causes:
+> ⚠️ **Avoid `pip install --user claude-agent-radar` on Windows.** The
+> executable lands in `%APPDATA%\Python\Python3XX\Scripts\`, which is
+> not on `PATH` by default, so `agent-radar` will print
+> `command not found` immediately after install. Use `pipx` instead.
 
-1. **`pip install --user` on Windows** drops `agent-radar.exe` into
-   `%APPDATA%\Python\Python3XX\Scripts\`, which is **not** on `PATH` by
-   default. Either add that folder to `PATH`, or reinstall via
-   `pipx install agent-radar` / `uv tool install agent-radar` — both
-   wire up the entry point automatically.
-2. **Using a venv that isn't activated** — activate it, or call the
-   binary by its full path.
-
-In all cases, this module form is a drop-in replacement that needs no
-PATH setup:
+If for any reason the CLI isn't on `PATH`, `python -m agent_radar` is
+a drop-in replacement (same arguments):
 
 ```bash
 python -m agent_radar --help
@@ -141,8 +135,9 @@ following — Claude will load the skill and walk you through the scan:
 - "benchmark our team's Claude Code adoption"
 
 The skill invokes the same `agent-radar` CLI, so the package must be
-`pip install`-ed first (or you must launch it via `python -m agent_radar`
-from inside the skill directory).
+installed first (`pipx install claude-agent-radar` is the path of
+least resistance), or you must launch it via `python -m agent_radar`
+from inside the skill directory.
 
 ## Run
 
@@ -163,8 +158,7 @@ start report.html       # Windows (PowerShell / cmd)
 ```
 
 If `agent-radar` is not found, swap every `agent-radar` for
-`python -m agent_radar` (same arguments). See
-[**`agent-radar` not on PATH?**](#agent-radar-not-on-path) above.
+`python -m agent_radar` (same arguments). See the install notes above.
 
 ### Subcommands
 

@@ -57,55 +57,51 @@ ASCII art / 裝飾性內容偵測、CLAUDE.md 過大警告等),用純 Python 重
 
 **前置需求**:Python 3.8+ (僅用標準庫,零外部相依)。
 
-### 方式 A · 從 PyPI / 原始碼安裝 (推薦)
+### 方式 A · 從 PyPI 安裝 (推薦)
 
-支援 `pip` / `uv` / `poetry`。裝完後先驗證指令在 PATH 上:
+PyPI 套件名是 **`claude-agent-radar`** (PyPI 拒絕了較短的
+`agent-radar`,因為跟一個無關的既有套件名稱衝突)。CLI 指令名與
+Python module 名仍為 `agent-radar` 與 `agent_radar`。
 
-```bash
-agent-radar --help
-```
-
-有印出 help 就完成了。如果出現 `command not found` / `不是內部或外部命令`,
-請看下面的 **「`agent-radar` 找不到指令?」** 段落——
-`python -m agent_radar` 是隨時可用的替代寫法。
+底下兩種推薦安裝法會自動把 `agent-radar.exe` 放上 `PATH`——
+不需要手動改環境變數。
 
 ```bash
-# pip (系統 / venv)
-pip install agent-radar
+# 推薦 · pipx (各 OS 都能用,免設定)
+pipx install claude-agent-radar
 
-# pip --user (免管理員權限;Windows 上請看下方 PATH 提醒)
-pip install --user agent-radar
+# 推薦 · uv tool (你已經在用 uv 的話)
+uv tool install claude-agent-radar
 
-# uv
-uv pip install agent-radar
-# 或裝成 uv 管理的工具 (會自動處理 PATH)
-uv tool install agent-radar
+# 在已啟動的 venv 裡裝
+python -m venv .venv
+.venv\Scripts\activate           # Windows
+source .venv/bin/activate        # macOS / Linux
+pip install claude-agent-radar
 
-# pipx (獨立環境,自動處理 PATH —— Windows 上最推薦)
-pipx install agent-radar
-
-# poetry
-poetry add agent-radar
-
-# 在原始碼上開發 (editable install)
-git clone <repo-url> agent-radar
+# 開發用 (editable install)
+git clone https://github.com/millerlai/agent-radar
 cd agent-radar
 pip install -e .
+```
+
+裝完後驗證:
+
+```bash
 agent-radar --help
 ```
 
-#### `agent-radar` 找不到指令?
+如果 `pipx` / `uv tool install` 成功但 `agent-radar` 還是
+`command not found`,代表 shell 還沒讀到 tool-bin 目錄 ——
+跑 `pipx ensurepath` 或 `uv tool update-shell`,再重開 shell 即可。
 
-兩個常見原因:
+> ⚠️ **Windows 上不要用 `pip install --user claude-agent-radar`。**
+> 執行檔會被裝到 `%APPDATA%\Python\Python3XX\Scripts\`,這個目錄
+> 預設**不在 PATH 上**,裝完馬上會 `command not found`。請改用
+> `pipx`。
 
-1. **Windows 上用 `pip install --user`** 會把 `agent-radar.exe` 裝到
-   `%APPDATA%\Python\Python3XX\Scripts\`,而這個目錄預設**不在 PATH** 上。
-   解法:把該目錄加進 PATH,或改用 `pipx install agent-radar` /
-   `uv tool install agent-radar` (都會自動處理 entry point)。
-2. **在沒啟用的 venv 裡安裝** —— 先 activate 該 venv,或直接呼叫完整
-   路徑的執行檔。
-
-不管哪種情況,以下這種寫法都能用,完全不需要動 PATH:
+如果 CLI 真的因為某些原因不在 PATH 上,`python -m agent_radar` 是
+完全等價的替代寫法 (參數一致):
 
 ```bash
 python -m agent_radar --help
@@ -133,8 +129,9 @@ Copy-Item -Recurse C:\path\to\agent-radar $env:USERPROFILE\.claude\skills\agent-
 - 「找出我設定的盲區」
 - 「benchmark our team's Claude Code adoption」
 
-skill 會呼叫 `agent-radar` CLI,所以請先 `pip install agent-radar`,或在
-skill 目錄裡改用 `python -m agent_radar ...`。
+skill 會呼叫 `agent-radar` CLI,所以請先把套件裝起來
+(`pipx install claude-agent-radar` 最簡便),或在 skill 目錄裡改用
+`python -m agent_radar ...`。
 
 ## 執行
 
@@ -155,8 +152,7 @@ start report.html       # Windows (PowerShell / cmd)
 ```
 
 如果 `agent-radar` 找不到指令,把每一行的 `agent-radar` 換成
-`python -m agent_radar` 即可 (參數完全相同)。詳見上方
-[**`agent-radar` 找不到指令?**](#agent-radar-找不到指令)。
+`python -m agent_radar` 即可 (參數完全相同)。詳見上方安裝段。
 
 ### 子指令一覽
 
