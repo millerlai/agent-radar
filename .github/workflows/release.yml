@@ -18,10 +18,14 @@
 #          Environment name: (leave blank)
 #     4. Save. No PyPI token needs to live in GitHub Secrets.
 #
-#   Branch protection (if main is protected)
-#     The github-actions bot must be allowed to push directly to main, or
-#     the push step will fail. Either disable "Require pull request before
-#     merging" for main, or add github-actions[bot] to the bypass list.
+#   Branch protection bypass (only if main requires PRs)
+#     The default GITHUB_TOKEN cannot bypass "Require pull request before
+#     merging", so the workflow uses a fine-grained PAT instead. Create a
+#     fine-grained PAT at https://github.com/settings/personal-access-tokens/new
+#     scoped to this repo with `Contents: Read and write`, then store it as
+#     repo secret `RELEASE_TOKEN`. If main has no branch protection, the
+#     default GITHUB_TOKEN is enough — drop the `token:` line below and
+#     swap `secrets.RELEASE_TOKEN` for `github.token` in the push step.
 #
 # To release: Actions tab → "Release" → "Run workflow" → enter `0.1.1`.
 
@@ -55,6 +59,9 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          # PAT (admin actor) so the push to protected main succeeds.
+          # See the one-time setup comment at the top of this file.
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - uses: astral-sh/setup-uv@v6
         with:
