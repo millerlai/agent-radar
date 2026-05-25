@@ -160,7 +160,7 @@ skill 會呼叫 `agent-radar` CLI,所以請先把套件裝起來
 請在「想被掃描的 repo」目錄裡執行:
 
 ```bash
-agent-radar scan --include-home . -o scan.json
+agent-radar scan --include-home . -o scan.json    # 掃當前 repo
 agent-radar session -o session.json
 agent-radar report scan.json --session session.json -o report.html
 
@@ -168,6 +168,15 @@ agent-radar report scan.json --session session.json -o report.html
 open report.html        # macOS
 xdg-open report.html    # Linux
 start report.html       # Windows (PowerShell / cmd)
+```
+
+**多 repo 版本** — `scan` 可以一次吃任意多個路徑,
+報告會自動產出 per-target 比較,可以拿來 benchmark 整個團隊:
+
+```bash
+agent-radar scan --include-home /repos/a /repos/b /repos/c -o scan.json
+agent-radar session -o session.json
+agent-radar report scan.json --session session.json -o report.html
 ```
 
 如果 `agent-radar` 找不到指令,把每一行的 `agent-radar` 換成
