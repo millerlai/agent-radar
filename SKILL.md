@@ -52,7 +52,7 @@ agent-radar report scan.json --session session.json -o report.html
 | Skills 運用 | 存在性、description 觸發品質、progressive disclosure、**Lint frontmatter + token 衛生** |
 | MCP 整合 | server 數量、類型廣度 |
 | 自動化 | hooks、subagents、自訂 commands、plugins |
-| 情境衛生 | user/project 分工、settings.local gitignore、模組化引用 |
+| 上下文管理 | user/project 分工、settings.local gitignore、模組化引用 |
 | 迭代與維護 | git history 中設定檔被修改次數與多樣性 |
 
 Lint 訊號借自 [felixgeelhaar/cclint] 與 [agentskills.io Skill Linter] 的規則,

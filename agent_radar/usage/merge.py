@@ -74,10 +74,27 @@ def scan_context_for(scan_target: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 def _gap_hint(dim: str, target_name: str,
-              usage_target: dict | None) -> tuple[str, dict]:
-    """Return (hint_key, hint_args). Rendered to text by agent_radar.i18n."""
+              usage_target: dict | None,
+              direction: str = "under") -> tuple[str, dict]:
+    """Return (hint_key, hint_args). Rendered to text by agent_radar.i18n.
+
+    ``direction``: ``"under"`` (configured > activated — typical underused case)
+    or ``"over"`` (activated > configured — heavy use relative to config; a
+    win signal, not a problem). Different hint keys per direction.
+    """
     usage_findings = (usage_target or {}).get("findings_by_dim", {}).get(dim, [])
 
+    if direction == "over":
+        # Configured side under-represents what's actually happening — this is
+        # almost always a positive signal (the user is doing more with less
+        # config than the score implies). Hint per axis where it's interesting.
+        if dim == "automation":
+            return "gap.over.automation", {"target": target_name}
+        if dim == "claude_md":
+            return "gap.over.claude_md", {"target": target_name}
+        return "gap.over.generic", {"target": target_name, "dim": dim}
+
+    # Default: "under" direction (the actionable case)
     if dim == "skills":
         proactive = next(
             (x for x in usage_findings if x.get("label_key") == "usage.skills.proactive"),
@@ -99,22 +116,42 @@ def _gap_hint(dim: str, target_name: str,
 
 
 def _rank_gaps(target_name: str, usage_target: dict | None,
-               merged_scores: dict, top_n: int = 3) -> list[dict]:
+               merged_scores: dict, top_n: int = 5,
+               config_findings_by_dim: dict | None = None,
+               usage_findings_by_dim: dict | None = None) -> list[dict]:
+    """Rank axes by |gap|, attach findings for drill-down, label direction.
+
+    Both directions are reported:
+      - ``"under"``: configured > activated (the canonical "you configured
+        but never used it" case — actionable)
+      - ``"over"``: activated > configured (heavy use relative to config —
+        a win signal, often points to a quality concern in config docs)
+
+    Noise floor: ignore |gap| ≤ 10.
+    """
+    cfg_by = config_findings_by_dim or {}
+    use_by = usage_findings_by_dim or {}
     rows = []
     for dim, scores in merged_scores.items():
         gap = scores["gap"]
-        if gap is None or gap <= 10:  # noise floor — ignore tiny gaps
+        if gap is None or abs(gap) <= 10:
             continue
-        hint_key, hint_args = _gap_hint(dim, target_name, usage_target)
+        direction = "under" if gap > 0 else "over"
+        hint_key, hint_args = _gap_hint(dim, target_name, usage_target, direction)
         rows.append({
             "dimension": dim,
-            "gap": gap,
+            "gap": gap,                       # signed; negative = over-activated
+            "abs_gap": abs(gap),              # for ranking
+            "direction": direction,
             "config": scores["config"],
             "usage": scores["usage"],
             "hint_key": hint_key,
             "hint_args": hint_args,
+            # Findings for click-to-drill-down in the report
+            "config_findings": cfg_by.get(dim, []),
+            "usage_findings": use_by.get(dim, []),
         })
-    rows.sort(key=lambda r: r["gap"], reverse=True)
+    rows.sort(key=lambda r: r["abs_gap"], reverse=True)
     return rows[:top_n]
 
 
@@ -136,11 +173,36 @@ def merge(scan_json: dict, usage_json: dict) -> dict:
         usage_dim_keys = list(usage_dims)
 
     usage_by_name: dict = usage_json.get("targets_by_name", {})
+    # session_scanner emits both ``targets`` (list) and ``targets_by_name``
+    # (dict). If only the list shape is present (e.g. user wrote their own
+    # adapter), fall back to building the by-name map here.
+    if not usage_by_name:
+        usage_by_name = {t.get("name"): t
+                         for t in usage_json.get("targets", []) if t.get("name")}
+
+    # Cross-side join also needs a path-based fallback: session_scanner
+    # derives display names from a lossy encoding (e.g.
+    # ``D--project-tradestation-monarch`` → ``monarch``), which never matches
+    # the scan target's pretty name (``tradestation-monarch``). The
+    # ``project_dir`` field is the encoded path itself — a stable join key
+    # we can reproduce on the scan side.
+    def _encode_path_for_join(path_str: str) -> str:
+        return path_str.replace(":", "-").replace("\\", "-").replace("/", "-")
+
+    usage_by_project_dir: dict = {}
+    for t in usage_json.get("targets", []):
+        pd = t.get("project_dir")
+        if pd:
+            usage_by_project_dir[pd] = t
 
     merged_targets = []
     for target in scan_json["targets"]:
         name = target["name"]
         utgt = usage_by_name.get(name)
+        # Fall back to path-encoded match if the lossy session-side name
+        # didn't line up with scan's pretty basename.
+        if utgt is None and target.get("path"):
+            utgt = usage_by_project_dir.get(_encode_path_for_join(target["path"]))
         usage_scores = (utgt or {}).get("scores", {})
 
         merged_scores: dict = {}
@@ -150,27 +212,38 @@ def merge(scan_json: dict, usage_json: dict) -> dict:
             gap = (round(cfg - use, 1) if isinstance(use, (int, float)) else None)
             merged_scores[dim] = {"config": cfg, "usage": use, "gap": gap}
 
-        top_gaps = _rank_gaps(name, utgt, merged_scores)
+        # 0.2.0 session_scanner emits a raw ``findings`` list; legacy
+        # usage_score OTel emits ``findings_by_dim`` pre-grouped. Support
+        # both by grouping on the fly when raw findings are present.
+        utgt_findings_by_dim = (utgt or {}).get("findings_by_dim") or \
+            _group_findings((utgt or {}).get("findings", []))
+        cfg_findings_by_dim = _group_findings(target.get("findings", []))
+
+        # Recompute top_gaps with findings attached for drill-down render.
+        top_gaps = _rank_gaps(
+            name, utgt, merged_scores,
+            config_findings_by_dim=cfg_findings_by_dim,
+            usage_findings_by_dim=utgt_findings_by_dim,
+        )
 
         merged_targets.append({
             "name": name,
             "path": target.get("path"),
-            "level_threshold": target.get("level_threshold", 0),
             "config_overall": target.get("overall"),
             "usage_overall": (utgt or {}).get("overall"),
             "scores": merged_scores,
-            "config_findings_by_dim": _group_findings(target.get("findings", [])),
-            "usage_findings_by_dim": (utgt or {}).get("findings_by_dim", {}),
+            "config_findings_by_dim": cfg_findings_by_dim,
+            "usage_findings_by_dim": utgt_findings_by_dim,
             "top_gaps": top_gaps,
             "totals": (utgt or {}).get("totals", {}),
-            "blind_spots": target.get("blind_spots", []),
+            "blind_spots": (target.get("blind_spots", []) +
+                            (utgt or {}).get("blind_spots", [])),
             "notes": (utgt or {}).get("notes", []),
         })
 
     return {
         "dimensions": dim_keys,
         "usage_dimensions": usage_dim_keys,
-        "level_thresholds": scan_json.get("level_thresholds", [0, 20, 40, 60, 80]),
         "targets": merged_targets,
     }
 

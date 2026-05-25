@@ -2,28 +2,31 @@
 """
 agent-radar :: agent_radar.session_scanner
 ==========================================
-量測「實際運用度」(dynamic usage)。
+Quantify "activation" — what actually fires inside Claude Code sessions —
+on the same five axes as ``agent_radar.scanner``.
 
-``agent_radar.scanner`` 量的是配置 (靜態指紋);本工具讀取 Claude Code 本機
-session 紀錄 (~/.claude/projects/*/*.jsonl),量化使用者真實用了 Claude Code
-多少功能。
+Design (0.2.0 — activation-gap framing)
+----------------------------------------
+For each capability axis we compute a 0-100 *activated* score from the
+local JSONL session logs (``~/.claude/projects/*/*.jsonl``). The companion
+``scanner`` reports *configured* on the same axes; ``merge`` produces the
+Activation Gap (Configured − Activated) which is the product's main view.
 
-設計理念
---------
-配置完整度與實際運用度是兩件事。寫了 CLAUDE.md 不代表它有在指導 session,
-裝了 MCP server 不代表真的被呼叫,定義了 skill 不代表 description 觸發得到。
-本工具讀取 JSONL 把這些「真正發生的事」量化成六大運用維度分數,
-與 ``agent_radar.scanner`` 配置分數疊起來,落差即為改善空間。
+Per-axis activation signals
+---------------------------
+  claude_md       - (1 - correction_rate) × 100
+                    Low correction rate ⇒ CLAUDE.md is effectively guiding.
+  skills          - min(100, skill_calls × 10)
+  mcp             - min(100, mcp_calls × 8)
+  automation      - min(100, agent_calls × 10)
+                    Agent tool dispatches; hooks/commands not visible in JSONL.
+  context_hygiene - blends two signals:
+                      (1 - read_repeat_rate) × 50    [efficiency half]
+                      mention_rate × 50              [@-reference half]
 
-七大運用維度
------------
-  1. tool_diversity      - 工具呼叫多樣性 (用了幾種工具?)
-  2. skill_triggered     - Skills 是否真的觸發 (Skill tool call 次數)
-  3. mcp_triggered       - MCP server 是否真的被呼叫 (mcp__ prefix tool)
-  4. subagent_triggered  - Subagent 是否真的被派遣 (Agent tool call 次數)
-  5. low_correction      - 使用者糾正頻率低 = CLAUDE.md 指導力佳 (反向計分)
-  6. context_efficiency  - 重複讀同檔比例低 = context 利用率高
-  7. session_volume      - Session 量 (基準曝光度,過低時其他分數參考價值低)
+Auxiliary stats (not axes, kept for the coach):
+  - tool_diversity / tool_counter top-5 (per-target metadata)
+  - sessions / total_messages (volume baseline)
 
 JSON shape
 ----------
@@ -40,12 +43,13 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
+
+# Five axes — must match agent_radar.scanner.DIMENSION_KEYS for merge alignment.
 USAGE_DIMENSION_KEYS = [
-    "tool_diversity", "skill_triggered", "mcp_triggered", "subagent_triggered",
-    "low_correction", "context_efficiency", "session_volume",
+    "claude_md", "skills", "mcp", "automation", "context_hygiene",
 ]
 
-# 使用者糾正訊號 (中英雙語)。匹配 user 訊息開頭的糾正性語句。
+# Correction signals (en + zh) — matches at start of user messages.
 CORRECTION_PATTERNS = [
     r"^\s*no\b", r"^\s*don't\b", r"^\s*stop\b", r"^\s*wait\b", r"^\s*actually\b",
     r"^\s*that's wrong", r"^\s*wrong\b", r"^\s*revert\b", r"^\s*undo\b",
@@ -55,6 +59,9 @@ CORRECTION_PATTERNS = [
 ]
 CORRECTION_RE = re.compile("|".join(CORRECTION_PATTERNS), re.IGNORECASE)
 
+# @path mentions in user messages — Claude Code's "explicit context" idiom.
+MENTION_RE = re.compile(r"(^|\s)@[\w./\-]+")
+
 
 @dataclass
 class UsageReport:
@@ -62,17 +69,22 @@ class UsageReport:
     project_dir: str
     sessions: int = 0
     total_messages: int = 0
+    user_messages: int = 0
+    # Tool-call counters
     tool_calls: int = 0
     unique_tools: list = field(default_factory=list)
+    tool_top5: str = ""
     skill_calls: int = 0
     mcp_calls: int = 0
-    subagent_calls: int = 0
-    user_messages: int = 0
+    subagent_calls: int = 0   # `Agent` tool dispatches
+    # Quality signals
     corrections: int = 0
+    mentions: int = 0
     reads_total: int = 0
     reads_repeat: int = 0
+    # Output
     findings: list = field(default_factory=list)
-    scores: dict = field(default_factory=dict)
+    scores: dict = field(default_factory=dict)        # axis -> 0..100 activated
     overall: float = 0.0
 
 
@@ -143,8 +155,10 @@ def analyze_project(proj_dir: Path) -> UsageReport:
             if t == "user":
                 rep.user_messages += 1
                 text = _extract_text(content)
-                if text and CORRECTION_RE.search(text):
-                    rep.corrections += 1
+                if text:
+                    if CORRECTION_RE.search(text):
+                        rep.corrections += 1
+                    rep.mentions += len(MENTION_RE.findall(text))
             else:
                 for tu in _walk_tool_uses(content):
                     name_ = tu.get("name", "")
@@ -156,10 +170,9 @@ def analyze_project(proj_dir: Path) -> UsageReport:
                         rep.skill_calls += 1
                     if name_.startswith("mcp__"):
                         rep.mcp_calls += 1
-                    # Subagent dispatch tool in current Claude Code JSONL is
-                    # ``Agent``. (Older OTel collectors saw ``Task`` with a
-                    # ``subagent_type`` param; JSONL exposes the tool name
-                    # directly, so we just match by name.)
+                    # Agent is the current Claude Code subagent-launcher tool
+                    # (older OTel collectors saw "Task" + subagent_type param;
+                    # JSONL exposes the tool name directly).
                     if name_ == "Agent":
                         rep.subagent_calls += 1
                     if name_ == "Read":
@@ -175,125 +188,123 @@ def analyze_project(proj_dir: Path) -> UsageReport:
                 rep.reads_repeat += (n - 1)
 
     rep.unique_tools = sorted(tool_counter.keys())
+    rep.tool_top5 = ", ".join(f"{k}({v})" for k, v in tool_counter.most_common(5))
 
+    # ---- Per-axis activated scores ----------------------------------------
     findings = []
 
-    # 1. tool_diversity
-    n_tools = len(rep.unique_tools)
-    score = _clamp(n_tools * 12.5, 0, 100)
-    top_str = ", ".join(f"{k}({v})" for k, v in tool_counter.most_common(5))
+    # claude_md: low correction rate ⇒ CLAUDE.md is effectively guiding.
+    if rep.user_messages == 0:
+        cm_score = 0
+        cm_detail_key = "session.claude_md.empty"
+        cm_args: dict = {}
+    else:
+        rate = rep.corrections / rep.user_messages
+        cm_score = _clamp(100 - rate * 700, 0, 100)
+        cm_detail_key = "session.claude_md.detail"
+        cm_args = {"c": rep.corrections, "m": rep.user_messages,
+                   "pct": rate * 100}
     findings.append({
-        "dimension": "tool_diversity",
-        "label_key": "session.tool_diversity",
-        "weight": 100, "score": round(score, 1),
-        "detail_key": "session.tool_diversity.detail",
-        "detail_args": {"n": n_tools, "top": top_str},
+        "dimension": "claude_md",
+        "label_key": "session.claude_md.guidance",
+        "weight": 100, "score": round(cm_score, 1),
+        "detail_key": cm_detail_key, "detail_args": cm_args,
     })
 
-    # 2. skill_triggered
-    score = _clamp(rep.skill_calls * 12, 0, 100)
+    # skills: Skill tool dispatches
+    sk_score = _clamp(rep.skill_calls * 10, 0, 100)
     findings.append({
-        "dimension": "skill_triggered",
-        "label_key": "session.skill_calls",
-        "weight": 100, "score": round(score, 1),
-        "detail_key": ("session.skill_calls.have" if rep.skill_calls
-                       else "session.skill_calls.none"),
+        "dimension": "skills",
+        "label_key": "session.skills.calls",
+        "weight": 100, "score": round(sk_score, 1),
+        "detail_key": ("session.skills.calls.have" if rep.skill_calls
+                       else "session.skills.calls.none"),
         "detail_args": ({"n": rep.skill_calls} if rep.skill_calls else {}),
     })
 
-    # 3. mcp_triggered
-    score = _clamp(rep.mcp_calls * 8, 0, 100)
+    # mcp: mcp__* invocations
+    mcp_score = _clamp(rep.mcp_calls * 8, 0, 100)
     findings.append({
-        "dimension": "mcp_triggered",
-        "label_key": "session.mcp_calls",
-        "weight": 100, "score": round(score, 1),
-        "detail_key": ("session.mcp_calls.have" if rep.mcp_calls
-                       else "session.mcp_calls.none"),
+        "dimension": "mcp",
+        "label_key": "session.mcp.calls",
+        "weight": 100, "score": round(mcp_score, 1),
+        "detail_key": ("session.mcp.calls.have" if rep.mcp_calls
+                       else "session.mcp.calls.none"),
         "detail_args": ({"n": rep.mcp_calls} if rep.mcp_calls else {}),
     })
 
-    # 4. subagent_triggered
-    # Same shape as skill/mcp: each dispatch is rare-but-valuable, so 10 pts
-    # per call (≥10 calls saturates). Discourages over-fitting to one prolific
-    # session while still rewarding any real adoption.
-    score = _clamp(rep.subagent_calls * 10, 0, 100)
+    # automation: Agent subagent dispatches
+    # (hooks/commands fire silently in JSONL; only subagent dispatch is visible)
+    auto_score = _clamp(rep.subagent_calls * 10, 0, 100)
     findings.append({
-        "dimension": "subagent_triggered",
-        "label_key": "session.subagent_calls",
-        "weight": 100, "score": round(score, 1),
-        "detail_key": ("session.subagent_calls.have" if rep.subagent_calls
-                       else "session.subagent_calls.none"),
+        "dimension": "automation",
+        "label_key": "session.automation.subagent_calls",
+        "weight": 100, "score": round(auto_score, 1),
+        "detail_key": ("session.automation.subagent_calls.have" if rep.subagent_calls
+                       else "session.automation.subagent_calls.none"),
         "detail_args": ({"n": rep.subagent_calls} if rep.subagent_calls else {}),
     })
 
-    # 5. low_correction (反向)
-    if rep.user_messages == 0:
-        score = 0
-        detail_key = "session.low_correction.empty"
-        detail_args: dict = {}
-    else:
-        rate = rep.corrections / rep.user_messages
-        score = _clamp(100 - rate * 700, 0, 100)
-        detail_key = "session.low_correction.detail"
-        detail_args = {"c": rep.corrections, "m": rep.user_messages,
-                       "pct": rate * 100}
-    findings.append({
-        "dimension": "low_correction",
-        "label_key": "session.low_correction",
-        "weight": 100, "score": round(score, 1),
-        "detail_key": detail_key,
-        "detail_args": detail_args,
-    })
-
-    # 6. context_efficiency
+    # context_hygiene: blend of efficient reads (low repetition) + @-mention rate
     if rep.reads_total == 0:
-        score = 50
-        detail_key = "session.read_repeat.empty"
-        detail_args = {}
+        eff_half = 50.0  # neutral when there's no read activity to grade
+        eff_detail_key = "session.context.efficiency.empty"
+        eff_args: dict = {}
     else:
         repeat_rate = rep.reads_repeat / rep.reads_total
-        score = _clamp(100 - repeat_rate * 200, 0, 100)
-        detail_key = "session.read_repeat.detail"
-        detail_args = {"r": rep.reads_repeat, "t": rep.reads_total,
-                       "pct": repeat_rate * 100}
-    findings.append({
-        "dimension": "context_efficiency",
-        "label_key": "session.read_repeat",
-        "weight": 100, "score": round(score, 1),
-        "detail_key": detail_key,
-        "detail_args": detail_args,
-    })
+        eff_half = _clamp((1 - repeat_rate) * 50, 0, 50)
+        eff_detail_key = "session.context.efficiency.detail"
+        eff_args = {"r": rep.reads_repeat, "t": rep.reads_total,
+                    "pct": repeat_rate * 100}
 
-    # 7. session_volume
-    if rep.sessions == 0:
-        score = 0
-    elif rep.sessions < 3:
-        score = 30
-    elif rep.sessions < 10:
-        score = 60
+    if rep.user_messages == 0:
+        ment_half = 0.0
+        ment_detail_key = "session.context.mention.empty"
+        ment_args: dict = {}
     else:
-        score = 100
+        # 0.5 mentions per user msg counts as full credit (cap aggressively low —
+        # most users hit this naturally once they form the habit).
+        rate = rep.mentions / rep.user_messages
+        ment_half = _clamp(rate * 100, 0, 50)
+        ment_detail_key = "session.context.mention.detail"
+        ment_args = {"n": rep.mentions, "m": rep.user_messages,
+                     "rate": rate}
+
     findings.append({
-        "dimension": "session_volume",
-        "label_key": "session.session_volume",
-        "weight": 100, "score": round(score, 1),
-        "detail_key": "session.session_volume.detail",
-        "detail_args": {"s": rep.sessions, "m": rep.total_messages},
+        "dimension": "context_hygiene",
+        "label_key": "session.context.efficiency",
+        "weight": 50, "score": round(eff_half, 1),
+        "detail_key": eff_detail_key, "detail_args": eff_args,
+    })
+    findings.append({
+        "dimension": "context_hygiene",
+        "label_key": "session.context.mention",
+        "weight": 50, "score": round(ment_half, 1),
+        "detail_key": ment_detail_key, "detail_args": ment_args,
     })
 
     rep.findings = findings
-    rep.scores = {f["dimension"]: f["score"] for f in findings}
+
+    # Roll up per-axis scores
+    for dim in USAGE_DIMENSION_KEYS:
+        fs = [f for f in findings if f["dimension"] == dim]
+        got = sum(f["score"] for f in fs)
+        cap = sum(f["weight"] for f in fs)
+        rep.scores[dim] = round((got / cap * 100) if cap else 0, 1)
+
     rep.overall = round(sum(rep.scores.values()) / len(rep.scores), 1)
     return rep
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Claude Code 運用度 (session) 掃描器")
+    ap = argparse.ArgumentParser(
+        description="Claude Code activation scanner — JSONL session telemetry (0.2.0)")
     ap.add_argument("paths", nargs="*",
-                    help="篩選某幾個 repo 路徑 (對應 projects/ 編碼名);留空則掃所有 project")
+                    help="Filter to specific repo paths (encoded names under projects/). "
+                         "Empty = scan all projects.")
     ap.add_argument("--projects-dir", default=None,
-                    help="自訂 ~/.claude/projects 路徑 (跨 OS 時手動指定)")
-    ap.add_argument("-o", "--output", default="-", help="輸出 JSON 路徑 (預設 stdout)")
+                    help="Override ~/.claude/projects path (cross-OS / multi-account).")
+    ap.add_argument("-o", "--output", default="-", help="Output JSON path (default stdout)")
     args = ap.parse_args()
 
     if args.projects_dir:
@@ -302,8 +313,8 @@ def main():
         projects_root = Path.home() / ".claude" / "projects"
 
     if not projects_root.exists():
-        print(f"[err] projects 目錄不存在: {projects_root}", file=sys.stderr)
-        print("      (Cygwin 環境提示: 試 --projects-dir /c/Users/<you>/.claude/projects)",
+        print(f"[err] projects directory missing: {projects_root}", file=sys.stderr)
+        print("      (Cygwin tip: try --projects-dir /c/Users/<you>/.claude/projects)",
               file=sys.stderr)
         sys.exit(1)
 
@@ -323,7 +334,9 @@ def main():
 
     result = {
         "usage_dimensions": USAGE_DIMENSION_KEYS,
+        # Merge requires a name-keyed map; provide both shapes for convenience.
         "targets": [asdict(t) for t in targets],
+        "targets_by_name": {t.name: asdict(t) for t in targets},
         "blind_spots": [
             {"key": "session.blind.local_only", "args": {}},
             {"key": "session.blind.pattern_only", "args": {}},
@@ -335,7 +348,7 @@ def main():
         print(out)
     else:
         Path(args.output).write_text(out, encoding="utf-8")
-        print(f"[ok] 已寫入 {args.output} ({len(targets)} project)", file=sys.stderr)
+        print(f"[ok] wrote {args.output} ({len(targets)} project)", file=sys.stderr)
 
 
 if __name__ == "__main__":

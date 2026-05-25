@@ -1,15 +1,14 @@
 """agent-radar :: agent_radar.i18n
 ================================
-Localizable strings for findings, blind spots, gap hints, dimensions and levels.
+Localizable strings for findings, blind spots, gap hints, and dimensions.
+
+0.2.0 reset: only keys currently emitted by ``scanner`` / ``session_scanner``
+remain. Heuristic-quality keys from 0.1.x (structure/imperative/concise grades,
+skills description-quality grades) were removed along with their producers.
 
 Producers (``scanner``, ``session_scanner``, ``usage_score``, ``merge``) emit
-language-neutral keys + arg dicts into JSON. The HTML renderer in
-``report.py`` looks the strings up here at render time, driven by ``--lang``.
-
-Adding a new finding:
-  1. Add a key + en/zh template to ``FINDING_LABELS`` / ``FINDING_DETAILS``.
-  2. Emit ``{"label_key": key, "detail_key": key, "detail_args": {...}}``
-     from the producer.
+language-neutral keys + arg dicts into JSON. ``report`` resolves text per
+``--lang`` at render time.
 """
 
 from __future__ import annotations
@@ -17,20 +16,15 @@ from __future__ import annotations
 
 # ---------------------------------------------------------------------------
 # Finding labels — short titles shown in the report's accordion summaries.
-# Keyed by stable identifier; values are {lang: text}.
 # ---------------------------------------------------------------------------
 
 FINDING_LABELS: dict[str, dict[str, str]] = {
-    # scanner.py
+    # ----- scanner.py (configured-side facts) -----
     "scan.claude_md.exists":       {"en": "CLAUDE.md exists",                "zh": "CLAUDE.md 存在"},
-    "scan.claude_md.structure":    {"en": "Structured sections",             "zh": "結構化分區"},
-    "scan.claude_md.imperative":   {"en": "Imperative tone",                 "zh": "指令式語氣"},
-    "scan.claude_md.concise":      {"en": "Conciseness (not a prose dump)",  "zh": "精簡度 (非散文堆疊)"},
     "scan.claude_md.import":       {"en": "@import references",              "zh": "@import 引用"},
-    "scan.claude_md.lint_size":    {"en": "Lint: reasonable size",           "zh": "Lint: 大小合理"},
+    "scan.claude_md.lint_size":    {"en": "Lint: file size",                 "zh": "Lint: 檔案大小"},
+    "scan.claude_md.iteration":    {"en": "Iteration evidence",              "zh": "迭代證據"},
     "scan.skills.exists":          {"en": "Skills present",                  "zh": "Skills 存在"},
-    "scan.skills.description":     {"en": "Description quality",             "zh": "description 品質"},
-    "scan.skills.progressive":     {"en": "Progressive disclosure",          "zh": "Progressive disclosure"},
     "scan.skills.lint_hygiene":    {"en": "Lint: frontmatter & token hygiene", "zh": "Lint: frontmatter & token 衛生"},
     "scan.mcp.server_count":       {"en": "MCP server count",                "zh": "MCP server 數量"},
     "scan.mcp.category_breadth":   {"en": "MCP category breadth",            "zh": "MCP 類型廣度"},
@@ -41,19 +35,18 @@ FINDING_LABELS: dict[str, dict[str, str]] = {
     "scan.context.split":          {"en": "User/Project split",              "zh": "User/Project 分工"},
     "scan.context.shared_personal":{"en": "Shared vs personal config",       "zh": "共享/個人設定區分"},
     "scan.context.modular":        {"en": "Modular references",              "zh": "模組化引用"},
-    "scan.iteration.git":          {"en": "Config git iteration",            "zh": "設定檔 git 迭代"},
-    "scan.iteration.diversity":    {"en": "Config diversity",                "zh": "設定檔多樣性"},
 
-    # session_scanner.py
-    "session.tool_diversity":      {"en": "Tool diversity",                  "zh": "Tool 多樣性"},
-    "session.skill_calls":         {"en": "Skill tool invocations",          "zh": "Skill tool 呼叫"},
-    "session.mcp_calls":           {"en": "MCP tool invocations",            "zh": "MCP tool 呼叫"},
-    "session.subagent_calls":      {"en": "Subagent dispatches",             "zh": "Subagent 派遣"},
-    "session.low_correction":      {"en": "Low correction rate",             "zh": "低糾正率"},
-    "session.read_repeat":         {"en": "Read repetition rate (inverse)",  "zh": "Read 重複率 (反向)"},
-    "session.session_volume":      {"en": "Session volume",                  "zh": "Session 量"},
+    # ----- session_scanner.py (activated-side facts) -----
+    "session.claude_md.guidance":      {"en": "Guidance effectiveness (low correction rate)",
+                                        "zh": "指導生效度 (低糾正率)"},
+    "session.skills.calls":            {"en": "Skill tool invocations",      "zh": "Skill tool 呼叫"},
+    "session.mcp.calls":               {"en": "MCP tool invocations",        "zh": "MCP tool 呼叫"},
+    "session.automation.subagent_calls":{"en": "Subagent dispatches",        "zh": "Subagent 派遣"},
+    "session.context.efficiency":      {"en": "Read efficiency (low repetition)",
+                                        "zh": "Read 效率 (低重複)"},
+    "session.context.mention":         {"en": "@ reference rate",            "zh": "@ 引用頻率"},
 
-    # usage_score.py
+    # ----- usage_score.py (OTel, optional advanced path — kept for future use) -----
     "usage.skills.trigger_count":  {"en": "Skill trigger count",             "zh": "Skill 觸發次數"},
     "usage.skills.proactive":      {"en": "Proactive trigger ratio",         "zh": "proactive 觸發比例"},
     "usage.skills.at_least_one":   {"en": "At least one skill used",         "zh": "至少用過 1 個 skill"},
@@ -69,22 +62,13 @@ FINDING_LABELS: dict[str, dict[str, str]] = {
 
 
 # ---------------------------------------------------------------------------
-# Finding details — sentence-level templates with placeholders.
-#
-# Keys are usually <label_key>.<variant>, e.g. ``scan.automation.commands.have``
-# and ``scan.automation.commands.none`` for the two branches.
+# Finding details — sentence templates with placeholders.
 # ---------------------------------------------------------------------------
 
 FINDING_DETAILS: dict[str, dict[str, str]] = {
-    # scan.claude_md
+    # ----- scan.claude_md -----
     "scan.claude_md.exists.found":     {"en": "Found {paths}",                              "zh": "找到 {paths}"},
     "scan.claude_md.exists.none":      {"en": "No CLAUDE.md found",                         "zh": "未發現 CLAUDE.md"},
-    "scan.claude_md.placeholder":      {"en": "No CLAUDE.md to evaluate",                   "zh": "無 CLAUDE.md 可評估"},
-    "scan.claude_md.structure.detail": {"en": "{headers} header(s), {hints} section hint(s) matched",
-                                        "zh": "{headers} 個標題, 命中 {hints} 個分區關鍵字"},
-    "scan.claude_md.imperative.detail":{"en": "~{hits} imperative / rule statements detected",
-                                        "zh": "偵測到約 {hits} 處祈使/規範語句"},
-    "scan.claude_md.concise.detail":   {"en": "~{words} words",                             "zh": "約 {words} 字"},
     "scan.claude_md.import.have":      {"en": "{n} @ reference(s)",                         "zh": "{n} 處 @ 引用"},
     "scan.claude_md.import.none":      {"en": "@import not used to split files",            "zh": "未使用 @import 拆檔"},
     "scan.claude_md.lint_size.ok":     {"en": "{chars} chars (within limit)",               "zh": "{chars} chars (合規)"},
@@ -92,28 +76,25 @@ FINDING_DETAILS: dict[str, dict[str, str]] = {
                                         "zh": "{chars} chars (偏大,建議拆檔或精簡)"},
     "scan.claude_md.lint_size.hard":   {"en": "{chars} chars (oversize — violates cclint guidance, wastes context)",
                                         "zh": "{chars} chars (過大,違反 cclint 建議,context 浪費)"},
+    "scan.claude_md.iteration.detail": {"en": "{commits} git commit(s) on CLAUDE.md; {hits} iteration-loop content signal(s) (lessons-learned / do-not-repeat / dated rules)",
+                                        "zh": "{commits} 次 git 修改 CLAUDE.md;{hits} 處內容迭代訊號 (教訓 / 不要再 / 日期戳記)"},
 
-    # scan.skills
+    # ----- scan.skills -----
     "scan.skills.exists.have":         {"en": "Found {n} SKILL.md file(s)",                 "zh": "找到 {n} 個 SKILL.md"},
     "scan.skills.exists.none":         {"en": "Skills not in use",                          "zh": "未使用 skills"},
-    "scan.skills.placeholder":         {"en": "No skills to evaluate",                      "zh": "無 skills 可評估"},
-    "scan.skills.description.detail":  {"en": "Average description quality (incl. trigger description)",
-                                        "zh": "description 平均品質 (含觸發描述)"},
-    "scan.skills.progressive.detail":  {"en": "Main file conciseness + sibling-file split",
-                                        "zh": "主檔精簡 + 附屬檔拆分情況"},
     "scan.skills.lint.detail":         {"en": "frontmatter compliant {fm}/{n}",
                                         "zh": "frontmatter 合規 {fm}/{n}"},
     "scan.skills.lint.decor_suffix":   {"en": ", {n} ASCII-art / decorative banner violation(s)",
                                         "zh": ", {n} 處 ASCII art/裝飾性內容"},
     "scan.skills.lint.oversize_suffix":{"en": ", {n} oversize file(s)",                    "zh": ", 行數超標 {n}"},
 
-    # scan.mcp
+    # ----- scan.mcp -----
     "scan.mcp.server_count.have":      {"en": "{n} MCP server(s)",                          "zh": "{n} 個 MCP server"},
     "scan.mcp.server_count.none":      {"en": "No MCP server configured",                   "zh": "未設定任何 MCP server"},
     "scan.mcp.category_breadth.have":  {"en": "Categories covered: {cats}",                 "zh": "涵蓋類別: {cats}"},
     "scan.mcp.category_breadth.none":  {"en": "Could not classify categories",              "zh": "無法辨識類別"},
 
-    # scan.automation
+    # ----- scan.automation -----
     "scan.automation.hooks.have":      {"en": "Hooks configured",                           "zh": "偵測到 hooks 設定"},
     "scan.automation.hooks.none":      {"en": "Hooks not in use",                           "zh": "未使用 hooks"},
     "scan.automation.hooks.invalid":   {"en": "Lint: .claude/settings.json failed to parse (invalid JSON)",
@@ -125,7 +106,7 @@ FINDING_DETAILS: dict[str, dict[str, str]] = {
     "scan.automation.plugins.have":    {"en": "Plugins detected",                           "zh": "偵測到 plugin 使用"},
     "scan.automation.plugins.none":    {"en": "Plugins not in use",                         "zh": "未使用 plugins"},
 
-    # scan.context
+    # ----- scan.context -----
     "scan.context.split.full":         {"en": "Both project- and user-space config present (good split)",
                                         "zh": "同時具備 project 與 user-space 設定 (分工良好)"},
     "scan.context.split.project_only": {"en": "Project-space only (consider adding ~/.claude for personal preferences)",
@@ -137,30 +118,26 @@ FINDING_DETAILS: dict[str, dict[str, str]] = {
     "scan.context.modular.have":       {"en": "{n} modular reference(s)",                   "zh": "{n} 處模組化引用"},
     "scan.context.modular.none":       {"en": "Not split into modules",                     "zh": "未模組化拆檔"},
 
-    # scan.iteration
-    "scan.iteration.non_git":          {"en": "Not a git repo — cannot evaluate iteration", "zh": "非 git repo，無法評估迭代"},
-    "scan.iteration.non_git.short":    {"en": "Not a git repo",                             "zh": "非 git repo"},
-    "scan.iteration.git.detail":       {"en": "Config-related commit counts: {parts}",     "zh": "設定相關 commit 次數: {parts}"},
-    "scan.iteration.diversity.detail": {"en": "Iterated on {n} kind(s) of config file",    "zh": "曾迭代 {n} 類設定檔"},
-
-    # ---- session_scanner.py
-    "session.tool_diversity.detail":   {"en": "{n} distinct tool(s); top 5: {top}",        "zh": "{n} 種工具,前 5: {top}"},
-    "session.skill_calls.have":        {"en": "{n} Skill invocation(s)",                   "zh": "{n} 次 Skill 觸發"},
-    "session.skill_calls.none":        {"en": "Skill never triggered (description may be weak, or no skills installed)",
+    # ----- session_scanner activated-side details -----
+    "session.claude_md.detail":        {"en": "{c}/{m} user messages contain corrections ({pct:.1f}%) — high rate ⇒ CLAUDE.md not guiding",
+                                        "zh": "{c}/{m} user 訊息含糾正 ({pct:.1f}%) — 比例高 = CLAUDE.md 沒指導到"},
+    "session.claude_md.empty":         {"en": "No user messages to evaluate",               "zh": "無 user 訊息可評估"},
+    "session.skills.calls.have":       {"en": "{n} Skill invocation(s)",                    "zh": "{n} 次 Skill 觸發"},
+    "session.skills.calls.none":       {"en": "Skill never triggered (description may be weak, or no skills installed)",
                                         "zh": "Skill 從未觸發 (description 可能寫不夠好,或無安裝 skills)"},
-    "session.mcp_calls.have":          {"en": "{n} MCP server invocation(s)",              "zh": "{n} 次 MCP server 呼叫"},
-    "session.mcp_calls.none":          {"en": "MCP server never invoked",                  "zh": "MCP server 從未被呼叫"},
-    "session.subagent_calls.have":     {"en": "{n} subagent dispatch(es) via Agent tool",  "zh": "{n} 次 subagent 派遣 (Agent tool)"},
-    "session.subagent_calls.none":     {"en": "Subagent never dispatched (Agent tool unused)",
-                                        "zh": "從未派遣 subagent (Agent tool 未使用)"},
-    "session.low_correction.detail":   {"en": "{c}/{m} user messages contain corrections ({pct:.1f}%)",
-                                        "zh": "{c}/{m} user 訊息含糾正 ({pct:.1f}%)"},
-    "session.low_correction.empty":    {"en": "No user messages to evaluate",              "zh": "無 user 訊息可評估"},
-    "session.read_repeat.detail":      {"en": "{r}/{t} reads were repeats ({pct:.1f}%)",   "zh": "{r}/{t} 為重複讀檔 ({pct:.1f}%)"},
-    "session.read_repeat.empty":       {"en": "No Read activity",                          "zh": "無 Read 行為"},
-    "session.session_volume.detail":   {"en": "{s} session(s), {m} message(s)",            "zh": "{s} 個 session, {m} 則訊息"},
+    "session.mcp.calls.have":          {"en": "{n} MCP server invocation(s)",               "zh": "{n} 次 MCP server 呼叫"},
+    "session.mcp.calls.none":          {"en": "MCP server never invoked",                   "zh": "MCP server 從未被呼叫"},
+    "session.automation.subagent_calls.have": {"en": "{n} subagent dispatch(es) via Agent tool",
+                                                "zh": "{n} 次 subagent 派遣 (Agent tool)"},
+    "session.automation.subagent_calls.none": {"en": "Subagent never dispatched (Agent tool unused)",
+                                                "zh": "從未派遣 subagent (Agent tool 未使用)"},
+    "session.context.efficiency.detail":{"en": "{r}/{t} reads were repeats ({pct:.1f}%)",   "zh": "{r}/{t} 為重複讀檔 ({pct:.1f}%)"},
+    "session.context.efficiency.empty":{"en": "No Read activity",                           "zh": "無 Read 行為"},
+    "session.context.mention.detail":  {"en": "{n} @-mention(s) in {m} user message(s) (rate={rate:.2f}/msg)",
+                                        "zh": "{n} 處 @ 引用 / {m} user 訊息 (rate={rate:.2f}/msg)"},
+    "session.context.mention.empty":   {"en": "No user messages to evaluate",               "zh": "無 user 訊息可評估"},
 
-    # ---- usage_score.py
+    # ----- usage_score.py (OTel optional path) -----
     "usage.skills.trigger_count.detail":{"en": "{total} trigger(s) / {sessions} session(s) (activation_rate={rate:.2f})",
                                          "zh": "{total} 次觸發 / {sessions} session (activation_rate={rate:.2f})"},
     "usage.skills.proactive.detail":    {"en": "{p}/{t} were model-initiated ({pct:.0f}%) — reflects description triggerability",
@@ -193,25 +170,18 @@ FINDING_DETAILS: dict[str, dict[str, str]] = {
 
 BLIND_SPOTS: dict[str, dict[str, str]] = {
     "scan.blind.config_only": {
-        "en": "This tool only measures configuration completeness; it cannot tell "
-              "whether these settings are actually exercised in real sessions. "
-              "Wire up OpenTelemetry to measure actual usage — the gap is your "
-              "improvement headroom.",
-        "zh": "本工具只偵測『配置完整度』，無法得知這些設定在實際 session 中"
-              "是否真的被觸發。建議接 OpenTelemetry 量測『實際運用度』，"
-              "兩者落差即為改善空間。",
-    },
-    "scan.blind.non_git": {
-        "en": "This target is not a git repo, so the iteration dimension cannot "
-              "be evaluated; a low score is expected.",
-        "zh": "此目標非 git repo，迭代維度無法評估，分數偏低屬正常。",
+        "en": "scan only measures what's configured on disk. Pair with "
+              "`agent-radar session` to see what actually fires inside "
+              "Claude Code — the gap is your improvement headroom.",
+        "zh": "scan 只看磁碟上的配置。搭配 `agent-radar session` 量「實際運用」, "
+              "兩者落差就是改善空間。",
     },
     "session.blind.local_only": {
-        "en": "This tool reads local JSONL only; sessions on the cloud or other "
-              "machines are invisible. For cross-machine teams, pair with a "
-              "centralized OpenTelemetry collector.",
-        "zh": "本工具讀取本機 JSONL,無法觀測雲端 / 其他機器的 session;"
-              "若團隊跨機器使用,建議搭配 OpenTelemetry 中央化收集。",
+        "en": "session reads local JSONL only; sessions on the cloud or "
+              "other machines are invisible. For cross-machine teams, pair "
+              "with a centralized OpenTelemetry collector.",
+        "zh": "session 只讀本機 JSONL,雲端 / 其他機器的 session 看不到。"
+              "團隊跨機器使用建議搭配 OpenTelemetry 中央化收集。",
     },
     "session.blind.pattern_only": {
         "en": "Correction rate matches literal patterns only; semantic-level "
@@ -260,65 +230,71 @@ GAP_HINTS: dict[str, dict[str, str]] = {
               "幾乎不用 @ 引用。在常用檔上養成 `@path` 習慣以聚焦 context。",
     },
     "gap.claude_md": {
-        "en": "`{target}`: CLAUDE.md is thorough, but tool_decision shows proposals "
-              "are often rejected. Review which suggestions get rejected and "
-              "codify the rules in CLAUDE.md.",
-        "zh": "`{target}`：CLAUDE.md 寫得齊全，但 tool_decision 顯示提議常被拒。"
-              "回頭看哪些建議被拒，把規則明文寫進 CLAUDE.md。",
+        "en": "`{target}`: CLAUDE.md exists but the session correction rate is high "
+              "— users keep correcting Claude on things CLAUDE.md should already "
+              "cover. Pick the top 3 correction patterns and codify them.",
+        "zh": "`{target}`：CLAUDE.md 寫了，但 session 糾正率高 — 使用者一直在糾正"
+              "本來該由 CLAUDE.md 處理的事。挑出前 3 個常糾正情境寫成規則。",
     },
     "gap.generic": {
         "en": "`{target}` has a large config-vs-usage gap on `{dim}`. Investigate further.",
         "zh": "`{target}` 在 {dim} 維度配置 vs 運用落差大，請進一步審視。",
     },
+    # --- Over-activated direction (activated > configured): wins / under-documented strengths ---
+    "gap.over.automation": {
+        "en": "`{target}`: subagent dispatches outpace the configured automation surface. "
+              "You're using subagents heavily — consider documenting *why* they get "
+              "dispatched (in CLAUDE.md or subagent descriptions) so the pattern survives "
+              "future config edits.",
+        "zh": "`{target}`：subagent 派遣次數超過配置面所反映的程度。"
+              "你用 subagent 用得很重 — 建議把「為什麼會派遣」寫進 CLAUDE.md 或 "
+              "subagent description,讓這個 workflow 不會在未來改設定時意外丟失。",
+    },
+    "gap.over.claude_md": {
+        "en": "`{target}`: correction rate is very low even though CLAUDE.md isn't "
+              "maximally configured. Claude is being guided well by something — either "
+              "your prompts are unusually clear, or CLAUDE.md is more effective than its "
+              "configured-coverage score suggests. No action needed.",
+        "zh": "`{target}`：CLAUDE.md 配置不算滿分,但 user 糾正率極低。"
+              "Claude 在實際使用中被指導得很好 — 你 prompt 寫得好,或 CLAUDE.md 比"
+              "「配置覆蓋率」這個分數所反映的還有效。沒有需要立即動作的事。",
+    },
+    "gap.over.generic": {
+        "en": "`{target}`: `{dim}` is activated more than its configured surface suggests "
+              "— a positive signal. Document what's working so the pattern is preserved.",
+        "zh": "`{target}`：`{dim}` 的實際運用超過配置面所反映的程度,正向訊號。"
+              "建議把運作良好的東西寫下來,避免未來重構時遺失。",
+    },
 }
 
 
 # ---------------------------------------------------------------------------
-# Dimension labels (scan + usage). Producers carry only keys; report renders
-# via this table.
+# Dimension labels (five axes, used by both scanner and session_scanner).
 # ---------------------------------------------------------------------------
 
 DIMENSIONS: dict[str, dict[str, str]] = {
-    "claude_md":       {"en": "CLAUDE.md Maturity",       "zh": "CLAUDE.md 成熟度"},
-    "skills":          {"en": "Skills Usage",             "zh": "Skills 運用"},
-    "mcp":             {"en": "MCP Integration",          "zh": "MCP 整合"},
-    "automation":      {"en": "Automation",               "zh": "自動化"},
-    "context_hygiene": {"en": "Context Hygiene",          "zh": "情境衛生"},
-    "iteration":       {"en": "Iteration & Maintenance",  "zh": "迭代與維護"},
+    "claude_md":       {"en": "CLAUDE.md",            "zh": "CLAUDE.md"},
+    "skills":          {"en": "Skills",               "zh": "Skills"},
+    "mcp":             {"en": "MCP",                  "zh": "MCP"},
+    "automation":      {"en": "Automation",           "zh": "自動化"},
+    "context_hygiene": {"en": "Context Hygiene",      "zh": "上下文管理"},
 }
 
-
+# Kept for backwards-compat with usage_score.py (OTel path); it overlays the
+# same five axes but with ``.usage`` suffix in some emit paths.
 USAGE_DIMENSIONS: dict[str, dict[str, str]] = {
-    # session_scanner.py axes
-    "tool_diversity":     {"en": "Tool diversity",          "zh": "工具多樣性"},
-    "skill_triggered":    {"en": "Skill triggers (actual)", "zh": "Skills 實際觸發"},
-    "mcp_triggered":      {"en": "MCP calls (actual)",      "zh": "MCP 實際呼叫"},
-    "subagent_triggered": {"en": "Subagent dispatches (actual)", "zh": "Subagent 實際派遣"},
-    "low_correction":     {"en": "Low correction rate",     "zh": "低糾正率"},
-    "context_efficiency": {"en": "Context efficiency",      "zh": "Context 效率"},
-    "session_volume":     {"en": "Session volume",          "zh": "Session 量"},
-    # usage_score.py axes — mirror DIMENSIONS keys
-    # (resolved via DIMENSIONS first; here we only add usage-specific overrides)
+    "claude_md":       {"en": "CLAUDE.md",            "zh": "CLAUDE.md"},
+    "skills":          {"en": "Skills",               "zh": "Skills"},
+    "mcp":             {"en": "MCP",                  "zh": "MCP"},
+    "automation":      {"en": "Automation",           "zh": "自動化"},
+    "context_hygiene": {"en": "Context Hygiene",      "zh": "上下文管理"},
+    # OTel-specific overrides (legacy)
     "claude_md.usage":       {"en": "CLAUDE.md effectiveness (indirect)", "zh": "CLAUDE.md 生效度 (間接)"},
     "skills.usage":          {"en": "Skills usage",                       "zh": "Skills 運用"},
     "mcp.usage":             {"en": "MCP usage",                          "zh": "MCP 運用"},
     "automation.usage":      {"en": "Automation usage",                   "zh": "自動化運用"},
-    "context_hygiene.usage": {"en": "Context references (actual)",        "zh": "情境引用"},
+    "context_hygiene.usage": {"en": "Context references (actual)",        "zh": "上下文引用"},
 }
-
-
-# ---------------------------------------------------------------------------
-# Maturity levels — labels carry both an L# prefix and a one-word descriptor.
-# The report parses on the "·" separator.
-# ---------------------------------------------------------------------------
-
-LEVELS: list[tuple[int, dict[str, str]]] = [
-    (0,  {"en": "L0 · Unaware",    "zh": "L0 · 未使用 (Unaware)"}),
-    (20, {"en": "L1 · Reactive",   "zh": "L1 · 萌芽 (Reactive)"}),
-    (40, {"en": "L2 · Structured", "zh": "L2 · 結構化 (Structured)"}),
-    (60, {"en": "L3 · Advanced",   "zh": "L3 · 進階 (Advanced)"}),
-    (80, {"en": "L4 · Mastery",    "zh": "L4 · 精煉 (Mastery)"}),
-]
 
 
 # ---------------------------------------------------------------------------
@@ -344,9 +320,6 @@ def t_detail(key: str | None, args: dict | None, lang: str) -> str:
     rendered and appended after the base template. Used when a finding wants
     to optionally extend its detail (e.g. lint violations) without baking the
     conditionality into the template language.
-
-    Falls back to a best-effort rendering if the key is unknown so partial
-    rollouts don't produce blank rows.
     """
     if not key:
         return ""
@@ -387,10 +360,6 @@ def t_dimension(dim_key: str, lang: str) -> str:
     return (_pick(DIMENSIONS, dim_key, lang)
             or _pick(USAGE_DIMENSIONS, dim_key, lang)
             or dim_key)
-
-
-def levels_for(lang: str) -> list[tuple[int, str]]:
-    return [(th, entry.get(lang, entry["en"])) for th, entry in LEVELS]
 
 
 def dimensions_for(keys: list[str], lang: str) -> dict[str, str]:

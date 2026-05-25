@@ -1,60 +1,54 @@
-# agent-radar · AI Agent Capability Boundary Diagnostic
+# agent-radar · Activation Gap Diagnostic for Claude Code
 
-Detects the *capability boundary* of how an individual or a team uses the Claude Code
-ecosystem. It scans filesystem fingerprints and quantifies a person's mastery of
-CLAUDE.md, skills, MCP, hooks, subagents, and so on into six dimensions of maturity
-score (0–100), then outputs an HTML radar-chart report.
+**The one thing this tool does that nothing else can:** it sees both what you
+*configured* on disk AND what *actually fires* inside your Claude Code sessions
+— and the gap between the two is your improvement headroom.
 
-**Two-layer measurement:**
+- `agent-radar scan` reads filesystem fingerprints → **configured side** of five axes
+- `agent-radar session` reads local `~/.claude/projects/*.jsonl` → **activated side** of the same axes
+- `agent-radar merge` + `agent-radar report` → HTML showing the activation gap
 
-- `agent-radar scan` measures *configuration completeness* (static fingerprints, six config dimensions)
-- `agent-radar session` reads local `~/.claude/projects/*.jsonl` to measure *actual usage*
-  (which tools, Skills, MCP servers actually fire, plus user correction rate)
-
-The gap between the two is the most concrete improvement checklist. The repo itself
-is also a Claude Code skill (see `SKILL.md`) — drop it into `~/.claude/skills/agent-radar/`
-and it works out of the box.
+The companion `/agent-radar-coach` skill (install via `agent-radar install-skill`)
+walks you through closing the biggest gaps one at a time, evidence-driven, ask-before-edit.
 
 ## Core Idea
 
-How well someone uses Claude Code gets imprinted into their filesystem and session
-logs. This tool reads those fingerprints rather than monitoring conversation content.
+Most "Claude Code health" tools stop at "did you write a CLAUDE.md?" That's
+fingerprint detection — necessary but not interesting. What's interesting is
+that **plenty of people write a thorough CLAUDE.md and install five MCP servers,
+but nothing in those configs gets exercised during real sessions**. That gap
+is what agent-radar visualizes — two overlaid radar polygons make it obvious.
 
-- **Configuration completeness** (static) reflects how much you've *written down*: CLAUDE.md, skills, MCP.
-- **Actual usage** (dynamic) reflects whether those configs *actually fire* during sessions.
+agent-radar does NOT try to grade the *quality* of your CLAUDE.md — heuristics
+like "count of imperative verbs" don't actually measure quality, they just
+pretend to. Quality judgement is interpretive and lives in the coach skill,
+where Claude can read the content and reason about it.
 
-Plenty of people write a thorough CLAUDE.md and install five MCP servers, but nothing
-in those configs gets exercised during real sessions. That gap is exactly what
-agent-radar visualizes — two overlaid radar polygons make it obvious.
+## Five Axes
 
-## Six Config Dimensions (agent-radar scan)
+For each axis, scan produces a **Configured** score (0–100) and session produces
+an **Activated** score (0–100). The gap is improvement headroom.
 
-| Dimension | What it detects |
-|---|---|
-| CLAUDE.md maturity | Presence, user/project layering, structured sections, imperative tone, concision, `@import` modularization, **size lint** |
-| Skills usage | Whether skills exist, SKILL.md `description` trigger quality, progressive disclosure, **frontmatter & token-hygiene lint** |
-| MCP integration | Number of MCP servers and breadth of types (data / saas / cloud / search / files) |
-| Automation | hooks, subagents, custom slash commands, plugins |
-| Context hygiene | user/project settings separation, shared vs. personal config distinction (gitignore), modular references |
-| Iteration & maintenance | Whether configs have been repeatedly tuned over time (via git history) |
+| Axis | Configured (`scan`) | Activated (`session`) |
+|---|---|---|
+| `claude_md` | Presence, size, `@import` refs, **iteration evidence** (git commits + content patterns like "lessons learned / do not repeat / dated rules") | `(1 - correction_rate) × 100` — low correction rate = CLAUDE.md is guiding effectively |
+| `skills` | SKILL.md count + lint hygiene (frontmatter compliance, no ASCII-art banners, size limits) | `Skill` tool dispatch count × 10 |
+| `mcp` | Configured server count + category breadth (data / saas / cloud / search / files) | `mcp__*` tool call count × 8 |
+| `automation` | Hooks, subagents, custom commands, plugins (fact counts) | `Agent` tool dispatches × 10 (hooks/commands aren't visible in JSONL) |
+| `context_hygiene` | User/project split + `settings.local.json` gitignore + `@import` modularization | Blend: `(1 - read_repeat_rate) × 50` + `@-mention_rate × 50` |
 
 **Lint signals** are borrowed from [`felixgeelhaar/cclint`](https://github.com/felixgeelhaar/cclint)
 and the agentskills.io Skill Linter (required frontmatter fields, line-count limits,
-ASCII-art / decorative-content detection, oversized-CLAUDE.md warnings). They are
+ASCII-art / decorative-content detection, oversized-CLAUDE.md warnings),
 reimplemented in pure Python — no external dependencies.
 
-The total score maps onto five levels: L0 (unaware) → L4 (mastery).
-
-## Six Usage Dimensions (agent-radar session)
-
-| Dimension | What it measures |
-|---|---|
-| tool_diversity | How many distinct tools have been called in the session |
-| skill_triggered | How many times the `Skill` tool actually fired (signal that skill descriptions trigger) |
-| mcp_triggered | How many `mcp__*` tool calls happened (signal that MCP is really used) |
-| low_correction | Rate of corrective user messages (inverted — lower is better) |
-| context_efficiency | Rate of repeated reads of the same file in one session (inverted) |
-| session_volume | Session count and message volume (exposure baseline) |
+> **Migrating from 0.1.x?** The `iteration` dimension is gone — folded into
+> `claude_md` as a fact-based sub-signal (git commit count + content-regex
+> patterns). The 0-100 "overall maturity" score is also gone; the same number
+> still exists but is now framed as "Configured Coverage" not "Maturity".
+> Heuristic sub-checks (imperative-pattern count, structure-headers-score,
+> word-count concise bucket, skills description quality grade) were removed —
+> they pretended to measure quality the CLI cannot actually evaluate.
 
 ## Install
 

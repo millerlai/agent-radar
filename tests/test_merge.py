@@ -93,7 +93,7 @@ class TestRankGaps:
             "skills": {"config": 80, "usage": 20, "gap": 60},
             "mcp": {"config": 50, "usage": 30, "gap": 20},
             "automation": {"config": 40, "usage": 35, "gap": 5},  # noise floor
-            "iteration": {"config": 30, "usage": None, "gap": None},
+            "claude_md": {"config": 30, "usage": None, "gap": None},  # no usage data
         }
         gaps = _rank_gaps("repo", None, merged)
         dims = [g["dimension"] for g in gaps]
@@ -116,28 +116,26 @@ class TestRankGaps:
 # ---------------------------------------------------------------------------
 
 def _scan_data() -> dict:
+    # 0.2.0 five-axis shape (iteration folded into claude_md).
     return {
         "dimensions": [
-            "claude_md", "skills", "mcp", "automation",
-            "context_hygiene", "iteration",
+            "claude_md", "skills", "mcp", "automation", "context_hygiene",
         ],
-        "level_thresholds": [0, 20, 40, 60, 80],
         "targets": [{
             "name": "demo",
             "path": "/tmp/demo",
-            "level_threshold": 60,
             "overall": 60.0,
             "scores": {
                 "claude_md": 70.0, "skills": 80.0, "mcp": 50.0,
-                "automation": 40.0, "context_hygiene": 60.0, "iteration": 30.0,
+                "automation": 40.0, "context_hygiene": 60.0,
             },
             "findings": [
                 {"dimension": "skills", "label_key": "scan.skills.exists",
-                 "weight": 35, "score": 35,
+                 "weight": 70, "score": 70,
                  "detail_key": "scan.skills.exists.have",
                  "detail_args": {"n": 1}},
             ],
-            "blind_spots": [{"key": "scan.blind.non_git", "args": {}}],
+            "blind_spots": [{"key": "scan.blind.config_only", "args": {}}],
         }],
     }
 
@@ -145,8 +143,7 @@ def _scan_data() -> dict:
 def _usage_data() -> dict:
     return {
         "usage_dimensions": [
-            "claude_md", "skills", "mcp", "automation",
-            "context_hygiene", "iteration",
+            "claude_md", "skills", "mcp", "automation", "context_hygiene",
         ],
         "targets_by_name": {
             "demo": {
@@ -155,7 +152,6 @@ def _usage_data() -> dict:
                 "scores": {
                     "claude_md": 90.0, "skills": 20.0, "mcp": 30.0,
                     "automation": 35.0, "context_hygiene": 50.0,
-                    "iteration": None,
                 },
                 "findings_by_dim": {
                     "skills": [{"label_key": "usage.skills.proactive",
@@ -176,15 +172,16 @@ class TestMerge:
         assert t["config_overall"] == 60.0
         assert t["usage_overall"] == 45.0
         assert t["scores"]["skills"]["gap"] == 60.0
-        assert t["scores"]["iteration"]["gap"] is None
+        # All five axes have a usage value (iteration no longer exists)
+        assert all(t["scores"][d]["usage"] is not None
+                   for d in ["claude_md", "skills", "mcp", "automation", "context_hygiene"])
 
     def test_passes_through_metadata(self):
         merged = merge(_scan_data(), _usage_data())
         t = merged["targets"][0]
-        assert t["blind_spots"] == [{"key": "scan.blind.non_git", "args": {}}]
+        assert {"key": "scan.blind.config_only", "args": {}} in t["blind_spots"]
         assert t["notes"] == ["note"]
         assert t["totals"]["session_count"] == 3
-        assert t["level_threshold"] == 60
 
     def test_top_gaps_populated(self):
         merged = merge(_scan_data(), _usage_data())
