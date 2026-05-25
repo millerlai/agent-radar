@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activation Gap · agent-radar</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0b0f14; --panel: #121821; --panel-2: #0f141b; --line: #1f2a37;
+    --ink: #e4ecf4; --ink-dim: #8195a9; --good: #4ade80; --mid: #fbbf24;
+    --low: #f87171; --accent: #38bdf8;
+  }
+  body {
+    background:
+      radial-gradient(900px 600px at 80% -10%, rgba(56,189,248,.08), transparent),
+      radial-gradient(700px 500px at 0% 100%, rgba(74,222,128,.06), transparent),
+      var(--bg);
+    color: var(--ink); font-family: 'Noto Sans TC', system-ui, sans-serif;
+    line-height: 1.6; padding: 48px 20px 80px; min-height: 100vh;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .masthead { margin-bottom: 36px; }
+  .kicker { font-family: 'JetBrains Mono', monospace; font-size: 12px;
+            letter-spacing: .28em; color: var(--accent); text-transform: uppercase;
+            margin-bottom: 12px; }
+  h1 { font-size: clamp(28px, 5vw, 46px); font-weight: 900; line-height: 1.1; letter-spacing: -.02em; }
+  h1 .em { color: var(--accent); }
+  .sub { color: var(--ink-dim); margin-top: 14px; max-width: 64ch; font-size: 15px; }
+  .card { background: linear-gradient(180deg, var(--panel), var(--panel-2));
+          border: 1px solid var(--line); border-radius: 16px; padding: 28px;
+          margin-bottom: 22px; }
+  h2 { font-size: 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+  h2::before { content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
+  .card-sub { color: var(--ink-dim); font-size: 13.5px; max-width: 70ch; margin: -8px 0 18px; }
+  .pair-hint { color: var(--ink-dim); font-size: 13px; margin-top: 18px;
+               padding: 10px 14px; background: rgba(56,189,248,.06);
+               border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; }
+  .radar-wrap { display: grid; grid-template-columns: 1.1fr .9fr; gap: 24px; align-items: center; }
+  @media (max-width: 760px) { .radar-wrap { grid-template-columns: 1fr; } }
+  .radar { width: 100%; height: auto; }
+  .grid-ring { fill: none; stroke: var(--line); stroke-width: 1; }
+  .axis { stroke: var(--line); stroke-width: 1; }
+  .axis-label { fill: var(--ink-dim); font-size: 12.5px; font-family: 'Noto Sans TC'; font-weight: 500; }
+  .series { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 40%, transparent)); }
+  .legend { display: flex; flex-direction: column; gap: 10px; }
+  .leg { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-dim); }
+  .leg i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+  .leg b { margin-left: auto; color: var(--ink); font-family: 'JetBrains Mono'; }
+  .pill { font-family: 'JetBrains Mono'; font-weight: 700; padding: 3px 10px; border-radius: 999px; font-size: 13px; }
+  .pill.good { background: rgba(74,222,128,.15); color: var(--good); }
+  .pill.mid { background: rgba(251,191,36,.15); color: var(--mid); }
+  .pill.low { background: rgba(248,113,113,.15); color: var(--low); }
+  .target-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+                 margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .target-head h3 { font-size: 20px; }
+  .path { font-family: 'JetBrains Mono'; font-size: 11.5px; color: var(--ink-dim); word-break: break-all; }
+  .big-score { text-align: right; min-width: 110px; }
+  .big-score .num { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 40px; line-height: 1; display: block; }
+  .big-score.good .num { color: var(--good); }
+  .big-score.mid .num { color: var(--mid); }
+  .big-score.low .num { color: var(--low); }
+  .dim-block { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+  .dim-block summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between;
+                       align-items: center; padding: 14px 18px; background: var(--panel-2); }
+  .dim-block summary::-webkit-details-marker { display: none; }
+  .dim-block summary:hover { background: #141b25; }
+  .d-name { font-weight: 700; font-size: 15px; }
+  .d-score { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 18px; }
+  .d-score.good { color: var(--good); } .d-score.mid { color: var(--mid); } .d-score.low { color: var(--low); }
+  .findings { padding: 8px 18px 16px; }
+  .finding { padding: 12px 0; border-bottom: 1px dashed var(--line); }
+  .finding:last-child { border-bottom: none; }
+  .f-head { display: flex; justify-content: space-between; font-size: 14px; }
+  .f-label { font-weight: 500; }
+  .f-score { font-family: 'JetBrains Mono'; color: var(--ink-dim); font-size: 12px; }
+  .f-bar { height: 5px; background: var(--line); border-radius: 3px; margin: 7px 0; overflow: hidden; }
+  .f-bar i { display: block; height: 100%; border-radius: 3px; }
+  .finding.good .f-bar i { background: var(--good); }
+  .finding.mid .f-bar i { background: var(--mid); }
+  .finding.low .f-bar i { background: var(--low); }
+  .f-detail { font-size: 12.5px; color: var(--ink-dim); }
+  .blind { margin-top: 16px; font-size: 13px; color: var(--ink-dim); background: rgba(56,189,248,.06);
+           border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 0 8px 8px 0; }
+  .blind span { font-family: 'JetBrains Mono'; color: var(--accent); font-weight: 700; margin-right: 8px;
+                text-transform: uppercase; font-size: 11px; letter-spacing: .1em; }
+  footer { text-align: center; color: var(--ink-dim); font-size: 12px; margin-top: 40px;
+           font-family: 'JetBrains Mono'; }
+
+  .usage-series { stroke-linejoin: round; stroke-linecap: round; }
+  .legend .leg .sub { font-size: 11px; color: var(--ink-dim); margin-left: 8px; }
+  .gap-table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  .gap-table th { text-align: left; font-size: 12px; color: var(--ink-dim);
+                  font-weight: 500; padding: 8px 10px;
+                  border-bottom: 1px solid var(--line); }
+  .gap-table td { padding: 10px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .d-dual { display: inline-flex; align-items: center; gap: 10px; }
+  .d-sep  { color: var(--ink-dim); font-family: 'JetBrains Mono'; }
+  .d-gap  { margin-left: 6px; }
+  .dual-findings { display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+                   padding: 8px 18px 16px; }
+  @media (max-width: 760px) { .dual-findings { grid-template-columns: 1fr; } }
+  .col-head { font-family: 'JetBrains Mono'; font-size: 11px; color: var(--accent);
+              letter-spacing: .15em; text-transform: uppercase; padding: 8px 0;
+              border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+  .gap-list { padding: 0; margin: 8px 0 0; }
+  .gap-item { border: 1px solid var(--line); border-radius: 12px;
+              margin-bottom: 10px; overflow: hidden; background: var(--panel-2); }
+  .gap-item summary { list-style: none; cursor: pointer; display: flex;
+                      gap: 16px; padding: 14px 18px; align-items: flex-start; }
+  .gap-item summary::-webkit-details-marker { display: none; }
+  .gap-item summary:hover { background: #141b25; }
+  .gap-item[open] summary { border-bottom: 1px solid var(--line); }
+  .gap-item[open] .gap-expand-icon { transform: rotate(180deg); }
+  .gap-rank { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 22px;
+              color: var(--accent); min-width: 28px; line-height: 1.4; }
+  .gap-summary-body { flex: 1; min-width: 0; }
+  .gap-headline { display: flex; gap: 10px; align-items: center; margin-bottom: 4px;
+                  flex-wrap: wrap; }
+  .gap-tag { font-family: 'JetBrains Mono'; font-size: 10px; font-weight: 700;
+             padding: 2px 8px; border-radius: 999px; letter-spacing: .1em; }
+  .gap-tag-under { background: rgba(248,113,113,.18); color: var(--low); }
+  .gap-tag-over  { background: rgba(74,222,128,.18); color: var(--good); }
+  .gap-axis-name { font-family: 'JetBrains Mono'; font-size: 12px;
+                   color: var(--ink-dim); }
+  .gap-target { color: var(--ink); font-weight: 500; font-size: 13px;
+                margin-left: auto; }
+  .gap-hint { font-size: 14.5px; line-height: 1.55; }
+  .gap-meta { margin-top: 6px; color: var(--ink-dim); font-size: 12px;
+              display: flex; gap: 12px; flex-wrap: wrap; }
+  .gap-meta b { color: var(--ink); font-family: 'JetBrains Mono'; }
+  .gap-expand-icon { color: var(--ink-dim); font-size: 16px; margin-left: 8px;
+                     transition: transform .15s ease; line-height: 1.4; }
+  .gap-item .dual-findings { padding: 14px 18px 16px; }
+  .dual-legend { display: flex; gap: 22px; flex-wrap: wrap; align-items: center;
+                 padding: 12px 14px; background: var(--panel-2);
+                 border: 1px solid var(--line); border-radius: 10px;
+                 margin-top: 14px; font-size: 13px; color: var(--ink-dim); }
+  .dual-legend .swatch { display: inline-flex; align-items: center; gap: 8px; }
+  .dual-legend .sw-line { display: inline-block; width: 26px; height: 0;
+                          border-top: 2.5px solid var(--ink); }
+  .dual-legend .sw-line.dashed { border-top-style: dashed; border-top-width: 2px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="masthead">
+      <div class="kicker">agent-radar · configured vs activated</div>
+      <h1>Activation <span class="em">Gap</span> — what you configured but never used</h1>
+      <p class="sub">Overlays the configured side (solid lines) with the activated side (dashed lines) on the same five axes. The area between them is the capability waste zone.</p>
+    </header>
+
+    <section class="card">
+      <h2>Activation Gap Radar</h2>
+      <div class="radar-wrap">
+        <svg viewBox="0 0 660 660" xmlns="http://www.w3.org/2000/svg" role="img" class="radar">
+<polygon points="330.0,290.9 367.2,317.9 353.0,361.6 307.0,361.6 292.8,317.9" class="grid-ring"/>
+<polygon points="330.0,251.8 404.4,305.8 376.0,393.3 284.0,393.3 255.6,305.8" class="grid-ring"/>
+<polygon points="330.0,212.7 441.6,293.8 398.9,424.9 261.1,424.9 218.4,293.8" class="grid-ring"/>
+<polygon points="330.0,173.6 478.7,281.7 421.9,456.5 238.1,456.5 181.3,281.7" class="grid-ring"/>
+<line x1="330.0" y1="330.0" x2="330.0" y2="173.6" class="axis"/>
+<text x="330.0" y="143.6" text-anchor="middle" class="axis-label" dominant-baseline="middle">CLAUDE.md</text>
+<line x1="330.0" y1="330.0" x2="478.7" y2="281.7" class="axis"/>
+<text x="507.3" y="272.4" text-anchor="start" class="axis-label" dominant-baseline="middle">Skills</text>
+<line x1="330.0" y1="330.0" x2="421.9" y2="456.5" class="axis"/>
+<text x="439.6" y="480.8" text-anchor="start" class="axis-label" dominant-baseline="middle">MCP</text>
+<line x1="330.0" y1="330.0" x2="238.1" y2="456.5" class="axis"/>
+<text x="220.4" y="480.8" text-anchor="end" class="axis-label" dominant-baseline="middle">Automation</text>
+<line x1="330.0" y1="330.0" x2="181.3" y2="281.7" class="axis"/>
+<text x="152.7" y="272.4" text-anchor="end" class="axis-label" dominant-baseline="middle">Context Hygiene</text>
+<polygon points="330.0,198.6 478.7,281.7 346.5,352.8 261.1,424.9 225.9,296.2" fill="#4ade80" fill-opacity="0.12" stroke="#4ade80" stroke-width="2.5" class="series" style="--c:#4ade80"/>
+<circle cx="330.0" cy="198.6" r="3.5" fill="#4ade80"/>
+<circle cx="478.7" cy="281.7" r="3.5" fill="#4ade80"/>
+<circle cx="346.5" cy="352.8" r="3.5" fill="#4ade80"/>
+<circle cx="261.1" cy="424.9" r="3.5" fill="#4ade80"/>
+<circle cx="225.9" cy="296.2" r="3.5" fill="#4ade80"/>
+<polygon points="330.0,173.6 330.0,330.0 330.0,330.0 238.1,456.5 302.3,321.0" fill="none" stroke="#4ade80" stroke-width="2" stroke-dasharray="6 4" stroke-opacity="0.95" class="usage-series"/>
+<circle cx="330.0" cy="173.6" r="3" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+<circle cx="330.0" cy="330.0" r="3" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+<circle cx="330.0" cy="330.0" r="3" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+<circle cx="238.1" cy="456.5" r="3" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+<circle cx="302.3" cy="321.0" r="3" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+</svg>
+        <div class="legend"><span class="leg"><i style="background:#4ade80"></i>tradestation-monarch <b>69</b><span class="sub">→ 44</span></span></div>
+      </div>
+      <div class="dual-legend"><span class="swatch"><span class="sw-line"></span>Configured (filesystem fingerprint)</span><span class="swatch"><span class="sw-line dashed"></span>Activated (session JSONL)</span></div>
+    </section>
+
+    
+      <section class="card">
+        <h2>Biggest Gaps</h2>
+        <p class="card-sub">Top items by configured vs activated gap. Large gap = configured but unused; that's the cheapest capability to fix.</p>
+        <div class="gap-list">
+          <details class="gap-item gap-dir-under">
+            <summary>
+              <div class="gap-rank">1</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-under">UNDERUSED</span>
+                  <span class="gap-axis-name">skills</span>
+                  <span class="gap-target">tradestation-monarch</span>
+                </div>
+                <div class="gap-hint">`tradestation-monarch`: Skills configured but rarely triggered. Consider rewriting SKILL.md descriptions with explicit trigger scenarios.</div>
+                <div class="gap-meta">
+                  <span>· configured <b>100</b></span>
+                  <span>· activated <b>0</b></span>
+                  <span>· gap <b>+100</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="Click to expand the underlying configured + activated findings">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Skills present</span>
+          <span class="f-score">70/70</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">Found 4 SKILL.md file(s)</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Lint: frontmatter & token hygiene</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">frontmatter compliant 4/4</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">ACTIVATED</div>
+                
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">Skill tool invocations</span>
+          <span class="f-score">0/100</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">Skill never triggered (description may be weak, or no skills installed)</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="gap-item gap-dir-under">
+            <summary>
+              <div class="gap-rank">2</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-under">UNDERUSED</span>
+                  <span class="gap-axis-name">context_hygiene</span>
+                  <span class="gap-target">tradestation-monarch</span>
+                </div>
+                <div class="gap-hint">`tradestation-monarch`: CLAUDE.md / settings are well-structured, but sessions rarely use @ references. Build a `@path` habit on hot files to keep context focused.</div>
+                <div class="gap-meta">
+                  <span>· configured <b>70</b></span>
+                  <span>· activated <b>19</b></span>
+                  <span>· gap <b>+51</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="Click to expand the underlying configured + activated findings">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">User/Project split</span>
+          <span class="f-score">40/40</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">Both project- and user-space config present (good split)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">Shared vs personal config</span>
+          <span class="f-score">0/30</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">Shared vs personal config not separated</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Modular references</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">2 modular reference(s)</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">ACTIVATED</div>
+                
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">Read efficiency (low repetition)</span>
+          <span class="f-score">19/50</span>
+        </div>
+        <div class="f-bar"><i style="width:37%"></i></div>
+        <div class="f-detail">83/132 reads were repeats (62.9%)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">@ reference rate</span>
+          <span class="f-score">0/50</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">0 @-mention(s) in 821 user message(s) (rate=0.00/msg)</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="gap-item gap-dir-over">
+            <summary>
+              <div class="gap-rank">3</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-over">OVER-ACTIVATED</span>
+                  <span class="gap-axis-name">automation</span>
+                  <span class="gap-target">tradestation-monarch</span>
+                </div>
+                <div class="gap-hint">`tradestation-monarch`: subagent dispatches outpace the configured automation surface. You're using subagents heavily — consider documenting *why* they get dispatched (in CLAUDE.md or subagent descriptions) so the pattern survives future config edits.</div>
+                <div class="gap-meta">
+                  <span>· configured <b>75</b></span>
+                  <span>· activated <b>100</b></span>
+                  <span>· gap <b>-25</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="Click to expand the underlying configured + activated findings">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Hooks</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">Hooks configured</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Subagents</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">7 subagent(s)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">Custom slash commands</span>
+          <span class="f-score">0/25</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">No custom commands</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Plugins</span>
+          <span class="f-score">15/15</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">Plugins detected</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">ACTIVATED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Subagent dispatches</span>
+          <span class="f-score">100/100</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">41 subagent dispatch(es) via Agent tool</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="gap-item gap-dir-under">
+            <summary>
+              <div class="gap-rank">4</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-under">UNDERUSED</span>
+                  <span class="gap-axis-name">mcp</span>
+                  <span class="gap-target">tradestation-monarch</span>
+                </div>
+                <div class="gap-hint">`tradestation-monarch`: You configured MCP servers but the invocation ratio is low. Audit which servers are never used and prune or reconsider.</div>
+                <div class="gap-meta">
+                  <span>· configured <b>18</b></span>
+                  <span>· activated <b>0</b></span>
+                  <span>· gap <b>+18</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="Click to expand the underlying configured + activated findings">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">CONFIGURED</div>
+                
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">MCP server count</span>
+          <span class="f-score">18/50</span>
+        </div>
+        <div class="f-bar"><i style="width:36%"></i></div>
+        <div class="f-detail">1 MCP server(s)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">MCP category breadth</span>
+          <span class="f-score">0/50</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">Could not classify categories</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">ACTIVATED</div>
+                
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">MCP tool invocations</span>
+          <span class="f-score">0/100</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">MCP server never invoked</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="gap-item gap-dir-over">
+            <summary>
+              <div class="gap-rank">5</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-over">OVER-ACTIVATED</span>
+                  <span class="gap-axis-name">claude_md</span>
+                  <span class="gap-target">tradestation-monarch</span>
+                </div>
+                <div class="gap-hint">`tradestation-monarch`: correction rate is very low even though CLAUDE.md isn't maximally configured. Claude is being guided well by something — either your prompts are unusually clear, or CLAUDE.md is more effective than its configured-coverage score suggests. No action needed.</div>
+                <div class="gap-meta">
+                  <span>· configured <b>84</b></span>
+                  <span>· activated <b>100</b></span>
+                  <span>· gap <b>-16</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="Click to expand the underlying configured + activated findings">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">CLAUDE.md exists</span>
+          <span class="f-score">50/50</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">Found CLAUDE.md, .claude\CLAUDE.md</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">@import references</span>
+          <span class="f-score">10/10</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">2 @ reference(s)</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Lint: file size</span>
+          <span class="f-score">15/15</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">6912 chars (within limit)</div>
+      </div>
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">Iteration evidence</span>
+          <span class="f-score">9/25</span>
+        </div>
+        <div class="f-bar"><i style="width:36%"></i></div>
+        <div class="f-detail">3 git commit(s) on CLAUDE.md; 0 iteration-loop content signal(s) (lessons-learned / do-not-repeat / dated rules)</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">ACTIVATED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Guidance effectiveness (low correction rate)</span>
+          <span class="f-score">100/100</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">0/821 user messages contain corrections (0.0%) — high rate ⇒ CLAUDE.md not guiding</div>
+      </div>
+              </div>
+            </div>
+          </details></div>
+      </section>
+
+    <h2 style="margin: 32px 0 16px;">Per-Target Detail</h2>
+    
+      <section class="card target">
+        <div class="target-head">
+          <div>
+            <h3>tradestation-monarch</h3>
+            <code class="path">D:\project\tradestation-monarch</code>
+          </div>
+          <div class="big-score good">
+            <span class="num">69</span>
+          </div>
+        </div>
+        
+      <table class="gap-table">
+        <thead><tr><th>Dimension</th><th>Configured</th><th>Activated</th><th>Gap</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>CLAUDE.md</td>
+            <td><span class="pill good">84</span></td>
+            <td><span class="pill good">100</span></td>
+            <td><span class="pill good">-16</span></td>
+          </tr>
+          <tr>
+            <td>Skills</td>
+            <td><span class="pill good">100</span></td>
+            <td><span class="pill low">0</span></td>
+            <td><span class="pill low">+100</span></td>
+          </tr>
+          <tr>
+            <td>MCP</td>
+            <td><span class="pill low">18</span></td>
+            <td><span class="pill low">0</span></td>
+            <td><span class="pill mid">+18</span></td>
+          </tr>
+          <tr>
+            <td>Automation</td>
+            <td><span class="pill good">75</span></td>
+            <td><span class="pill good">100</span></td>
+            <td><span class="pill good">-25</span></td>
+          </tr>
+          <tr>
+            <td>Context Hygiene</td>
+            <td><span class="pill good">70</span></td>
+            <td><span class="pill low">19</span></td>
+            <td><span class="pill low">+51</span></td>
+          </tr></tbody>
+      </table>
+        <div style="margin-top: 18px;">
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">CLAUDE.md</span>
+              <span class="d-dual">
+                <span class="d-score good">84</span>
+                <span class="d-sep">/</span>
+                <span class="d-score good">100</span>
+                <span class="d-gap"><span class="pill good">-16</span></span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">CLAUDE.md exists</span>
+          <span class="f-score">50/50</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">Found CLAUDE.md, .claude\CLAUDE.md</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">@import references</span>
+          <span class="f-score">10/10</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">2 @ reference(s)</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Lint: file size</span>
+          <span class="f-score">15/15</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">6912 chars (within limit)</div>
+      </div>
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">Iteration evidence</span>
+          <span class="f-score">9/25</span>
+        </div>
+        <div class="f-bar"><i style="width:36%"></i></div>
+        <div class="f-detail">3 git commit(s) on CLAUDE.md; 0 iteration-loop content signal(s) (lessons-learned / do-not-repeat / dated rules)</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">ACTIVATED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Guidance effectiveness (low correction rate)</span>
+          <span class="f-score">100/100</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">0/821 user messages contain corrections (0.0%) — high rate ⇒ CLAUDE.md not guiding</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">Skills</span>
+              <span class="d-dual">
+                <span class="d-score good">100</span>
+                <span class="d-sep">/</span>
+                <span class="d-score low">0</span>
+                <span class="d-gap"><span class="pill low">+100</span></span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Skills present</span>
+          <span class="f-score">70/70</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">Found 4 SKILL.md file(s)</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Lint: frontmatter & token hygiene</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">frontmatter compliant 4/4</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">ACTIVATED</div>
+                
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">Skill tool invocations</span>
+          <span class="f-score">0/100</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">Skill never triggered (description may be weak, or no skills installed)</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">MCP</span>
+              <span class="d-dual">
+                <span class="d-score low">18</span>
+                <span class="d-sep">/</span>
+                <span class="d-score low">0</span>
+                <span class="d-gap"><span class="pill mid">+18</span></span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">CONFIGURED</div>
+                
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">MCP server count</span>
+          <span class="f-score">18/50</span>
+        </div>
+        <div class="f-bar"><i style="width:36%"></i></div>
+        <div class="f-detail">1 MCP server(s)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">MCP category breadth</span>
+          <span class="f-score">0/50</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">Could not classify categories</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">ACTIVATED</div>
+                
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">MCP tool invocations</span>
+          <span class="f-score">0/100</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">MCP server never invoked</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">Automation</span>
+              <span class="d-dual">
+                <span class="d-score good">75</span>
+                <span class="d-sep">/</span>
+                <span class="d-score good">100</span>
+                <span class="d-gap"><span class="pill good">-25</span></span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Hooks</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">Hooks configured</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Subagents</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">7 subagent(s)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">Custom slash commands</span>
+          <span class="f-score">0/25</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">No custom commands</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Plugins</span>
+          <span class="f-score">15/15</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">Plugins detected</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">ACTIVATED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Subagent dispatches</span>
+          <span class="f-score">100/100</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">41 subagent dispatch(es) via Agent tool</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">Context Hygiene</span>
+              <span class="d-dual">
+                <span class="d-score good">70</span>
+                <span class="d-sep">/</span>
+                <span class="d-score low">19</span>
+                <span class="d-gap"><span class="pill low">+51</span></span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">User/Project split</span>
+          <span class="f-score">40/40</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">Both project- and user-space config present (good split)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">Shared vs personal config</span>
+          <span class="f-score">0/30</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">Shared vs personal config not separated</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Modular references</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">2 modular reference(s)</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">ACTIVATED</div>
+                
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">Read efficiency (low repetition)</span>
+          <span class="f-score">19/50</span>
+        </div>
+        <div class="f-bar"><i style="width:37%"></i></div>
+        <div class="f-detail">83/132 reads were repeats (62.9%)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">@ reference rate</span>
+          <span class="f-score">0/50</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">0 @-mention(s) in 821 user message(s) (rate=0.00/msg)</div>
+      </div>
+              </div>
+            </div>
+          </details></div>
+        <p class="blind"><span>BLIND SPOT</span>scan only measures what's configured on disk. Pair with `agent-radar session` to see what actually fires inside Claude Code — the gap is your improvement headroom.</p>
+        
+      </section>
+
+    <footer>agent-radar · configured vs activated · gap = improvement headroom</footer>
+  </div>
+</body>
+</html>

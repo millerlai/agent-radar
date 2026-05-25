@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activation Gap · agent-radar</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0b0f14; --panel: #121821; --panel-2: #0f141b; --line: #1f2a37;
+    --ink: #e4ecf4; --ink-dim: #8195a9; --good: #4ade80; --mid: #fbbf24;
+    --low: #f87171; --accent: #38bdf8;
+  }
+  body {
+    background:
+      radial-gradient(900px 600px at 80% -10%, rgba(56,189,248,.08), transparent),
+      radial-gradient(700px 500px at 0% 100%, rgba(74,222,128,.06), transparent),
+      var(--bg);
+    color: var(--ink); font-family: 'Noto Sans TC', system-ui, sans-serif;
+    line-height: 1.6; padding: 48px 20px 80px; min-height: 100vh;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .masthead { margin-bottom: 36px; }
+  .kicker { font-family: 'JetBrains Mono', monospace; font-size: 12px;
+            letter-spacing: .28em; color: var(--accent); text-transform: uppercase;
+            margin-bottom: 12px; }
+  h1 { font-size: clamp(28px, 5vw, 46px); font-weight: 900; line-height: 1.1; letter-spacing: -.02em; }
+  h1 .em { color: var(--accent); }
+  .sub { color: var(--ink-dim); margin-top: 14px; max-width: 64ch; font-size: 15px; }
+  .card { background: linear-gradient(180deg, var(--panel), var(--panel-2));
+          border: 1px solid var(--line); border-radius: 16px; padding: 28px;
+          margin-bottom: 22px; }
+  h2 { font-size: 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
+  h2::before { content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
+  .card-sub { color: var(--ink-dim); font-size: 13.5px; max-width: 70ch; margin: -8px 0 18px; }
+  .pair-hint { color: var(--ink-dim); font-size: 13px; margin-top: 18px;
+               padding: 10px 14px; background: rgba(56,189,248,.06);
+               border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; }
+  .radar-wrap { display: grid; grid-template-columns: 1.1fr .9fr; gap: 24px; align-items: center; }
+  @media (max-width: 760px) { .radar-wrap { grid-template-columns: 1fr; } }
+  .radar { width: 100%; height: auto; }
+  .grid-ring { fill: none; stroke: var(--line); stroke-width: 1; }
+  .axis { stroke: var(--line); stroke-width: 1; }
+  .axis-label { fill: var(--ink-dim); font-size: 12.5px; font-family: 'Noto Sans TC'; font-weight: 500; }
+  .series { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--c) 40%, transparent)); }
+  .legend { display: flex; flex-direction: column; gap: 10px; }
+  .leg { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-dim); }
+  .leg i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+  .leg b { margin-left: auto; color: var(--ink); font-family: 'JetBrains Mono'; }
+  .pill { font-family: 'JetBrains Mono'; font-weight: 700; padding: 3px 10px; border-radius: 999px; font-size: 13px; }
+  .pill.good { background: rgba(74,222,128,.15); color: var(--good); }
+  .pill.mid { background: rgba(251,191,36,.15); color: var(--mid); }
+  .pill.low { background: rgba(248,113,113,.15); color: var(--low); }
+  .target-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+                 margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .target-head h3 { font-size: 20px; }
+  .path { font-family: 'JetBrains Mono'; font-size: 11.5px; color: var(--ink-dim); word-break: break-all; }
+  .big-score { text-align: right; min-width: 110px; }
+  .big-score .num { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 40px; line-height: 1; display: block; }
+  .big-score.good .num { color: var(--good); }
+  .big-score.mid .num { color: var(--mid); }
+  .big-score.low .num { color: var(--low); }
+  .dim-block { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+  .dim-block summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between;
+                       align-items: center; padding: 14px 18px; background: var(--panel-2); }
+  .dim-block summary::-webkit-details-marker { display: none; }
+  .dim-block summary:hover { background: #141b25; }
+  .d-name { font-weight: 700; font-size: 15px; }
+  .d-score { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 18px; }
+  .d-score.good { color: var(--good); } .d-score.mid { color: var(--mid); } .d-score.low { color: var(--low); }
+  .findings { padding: 8px 18px 16px; }
+  .finding { padding: 12px 0; border-bottom: 1px dashed var(--line); }
+  .finding:last-child { border-bottom: none; }
+  .f-head { display: flex; justify-content: space-between; font-size: 14px; }
+  .f-label { font-weight: 500; }
+  .f-score { font-family: 'JetBrains Mono'; color: var(--ink-dim); font-size: 12px; }
+  .f-bar { height: 5px; background: var(--line); border-radius: 3px; margin: 7px 0; overflow: hidden; }
+  .f-bar i { display: block; height: 100%; border-radius: 3px; }
+  .finding.good .f-bar i { background: var(--good); }
+  .finding.mid .f-bar i { background: var(--mid); }
+  .finding.low .f-bar i { background: var(--low); }
+  .f-detail { font-size: 12.5px; color: var(--ink-dim); }
+  .blind { margin-top: 16px; font-size: 13px; color: var(--ink-dim); background: rgba(56,189,248,.06);
+           border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 0 8px 8px 0; }
+  .blind span { font-family: 'JetBrains Mono'; color: var(--accent); font-weight: 700; margin-right: 8px;
+                text-transform: uppercase; font-size: 11px; letter-spacing: .1em; }
+  footer { text-align: center; color: var(--ink-dim); font-size: 12px; margin-top: 40px;
+           font-family: 'JetBrains Mono'; }
+
+  .usage-series { stroke-linejoin: round; stroke-linecap: round; }
+  .legend .leg .sub { font-size: 11px; color: var(--ink-dim); margin-left: 8px; }
+  .gap-table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  .gap-table th { text-align: left; font-size: 12px; color: var(--ink-dim);
+                  font-weight: 500; padding: 8px 10px;
+                  border-bottom: 1px solid var(--line); }
+  .gap-table td { padding: 10px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .d-dual { display: inline-flex; align-items: center; gap: 10px; }
+  .d-sep  { color: var(--ink-dim); font-family: 'JetBrains Mono'; }
+  .d-gap  { margin-left: 6px; }
+  .dual-findings { display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+                   padding: 8px 18px 16px; }
+  @media (max-width: 760px) { .dual-findings { grid-template-columns: 1fr; } }
+  .col-head { font-family: 'JetBrains Mono'; font-size: 11px; color: var(--accent);
+              letter-spacing: .15em; text-transform: uppercase; padding: 8px 0;
+              border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+  .gap-list { padding: 0; margin: 8px 0 0; }
+  .gap-item { border: 1px solid var(--line); border-radius: 12px;
+              margin-bottom: 10px; overflow: hidden; background: var(--panel-2); }
+  .gap-item summary { list-style: none; cursor: pointer; display: flex;
+                      gap: 16px; padding: 14px 18px; align-items: flex-start; }
+  .gap-item summary::-webkit-details-marker { display: none; }
+  .gap-item summary:hover { background: #141b25; }
+  .gap-item[open] summary { border-bottom: 1px solid var(--line); }
+  .gap-item[open] .gap-expand-icon { transform: rotate(180deg); }
+  .gap-rank { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 22px;
+              color: var(--accent); min-width: 28px; line-height: 1.4; }
+  .gap-summary-body { flex: 1; min-width: 0; }
+  .gap-headline { display: flex; gap: 10px; align-items: center; margin-bottom: 4px;
+                  flex-wrap: wrap; }
+  .gap-tag { font-family: 'JetBrains Mono'; font-size: 10px; font-weight: 700;
+             padding: 2px 8px; border-radius: 999px; letter-spacing: .1em; }
+  .gap-tag-under { background: rgba(248,113,113,.18); color: var(--low); }
+  .gap-tag-over  { background: rgba(74,222,128,.18); color: var(--good); }
+  .gap-axis-name { font-family: 'JetBrains Mono'; font-size: 12px;
+                   color: var(--ink-dim); }
+  .gap-target { color: var(--ink); font-weight: 500; font-size: 13px;
+                margin-left: auto; }
+  .gap-hint { font-size: 14.5px; line-height: 1.55; }
+  .gap-meta { margin-top: 6px; color: var(--ink-dim); font-size: 12px;
+              display: flex; gap: 12px; flex-wrap: wrap; }
+  .gap-meta b { color: var(--ink); font-family: 'JetBrains Mono'; }
+  .gap-expand-icon { color: var(--ink-dim); font-size: 16px; margin-left: 8px;
+                     transition: transform .15s ease; line-height: 1.4; }
+  .gap-item .dual-findings { padding: 14px 18px 16px; }
+  .dual-legend { display: flex; gap: 22px; flex-wrap: wrap; align-items: center;
+                 padding: 12px 14px; background: var(--panel-2);
+                 border: 1px solid var(--line); border-radius: 10px;
+                 margin-top: 14px; font-size: 13px; color: var(--ink-dim); }
+  .dual-legend .swatch { display: inline-flex; align-items: center; gap: 8px; }
+  .dual-legend .sw-line { display: inline-block; width: 26px; height: 0;
+                          border-top: 2.5px solid var(--ink); }
+  .dual-legend .sw-line.dashed { border-top-style: dashed; border-top-width: 2px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="masthead">
+      <div class="kicker">agent-radar · configured vs activated</div>
+      <h1>Activation <span class="em">Gap</span> — 你配了但沒在用的能力</h1>
+      <p class="sub">把「配置側」(實線) 與「啟動側」(虛線) 疊在五大軸上。兩者之間的面積就是能力浪費區。</p>
+    </header>
+
+    <section class="card">
+      <h2>Activation Gap 雷達</h2>
+      <div class="radar-wrap">
+        <svg viewBox="0 0 660 660" xmlns="http://www.w3.org/2000/svg" role="img" class="radar">
+<polygon points="330.0,290.9 367.2,317.9 353.0,361.6 307.0,361.6 292.8,317.9" class="grid-ring"/>
+<polygon points="330.0,251.8 404.4,305.8 376.0,393.3 284.0,393.3 255.6,305.8" class="grid-ring"/>
+<polygon points="330.0,212.7 441.6,293.8 398.9,424.9 261.1,424.9 218.4,293.8" class="grid-ring"/>
+<polygon points="330.0,173.6 478.7,281.7 421.9,456.5 238.1,456.5 181.3,281.7" class="grid-ring"/>
+<line x1="330.0" y1="330.0" x2="330.0" y2="173.6" class="axis"/>
+<text x="330.0" y="143.6" text-anchor="middle" class="axis-label" dominant-baseline="middle">CLAUDE.md</text>
+<line x1="330.0" y1="330.0" x2="478.7" y2="281.7" class="axis"/>
+<text x="507.3" y="272.4" text-anchor="start" class="axis-label" dominant-baseline="middle">Skills</text>
+<line x1="330.0" y1="330.0" x2="421.9" y2="456.5" class="axis"/>
+<text x="439.6" y="480.8" text-anchor="start" class="axis-label" dominant-baseline="middle">MCP</text>
+<line x1="330.0" y1="330.0" x2="238.1" y2="456.5" class="axis"/>
+<text x="220.4" y="480.8" text-anchor="end" class="axis-label" dominant-baseline="middle">自動化</text>
+<line x1="330.0" y1="330.0" x2="181.3" y2="281.7" class="axis"/>
+<text x="152.7" y="272.4" text-anchor="end" class="axis-label" dominant-baseline="middle">上下文管理</text>
+<polygon points="330.0,198.6 478.7,281.7 346.5,352.8 261.1,424.9 225.9,296.2" fill="#4ade80" fill-opacity="0.12" stroke="#4ade80" stroke-width="2.5" class="series" style="--c:#4ade80"/>
+<circle cx="330.0" cy="198.6" r="3.5" fill="#4ade80"/>
+<circle cx="478.7" cy="281.7" r="3.5" fill="#4ade80"/>
+<circle cx="346.5" cy="352.8" r="3.5" fill="#4ade80"/>
+<circle cx="261.1" cy="424.9" r="3.5" fill="#4ade80"/>
+<circle cx="225.9" cy="296.2" r="3.5" fill="#4ade80"/>
+<polygon points="330.0,173.6 330.0,330.0 330.0,330.0 238.1,456.5 302.3,321.0" fill="none" stroke="#4ade80" stroke-width="2" stroke-dasharray="6 4" stroke-opacity="0.95" class="usage-series"/>
+<circle cx="330.0" cy="173.6" r="3" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+<circle cx="330.0" cy="330.0" r="3" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+<circle cx="330.0" cy="330.0" r="3" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+<circle cx="238.1" cy="456.5" r="3" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+<circle cx="302.3" cy="321.0" r="3" fill="none" stroke="#4ade80" stroke-width="1.6"/>
+</svg>
+        <div class="legend"><span class="leg"><i style="background:#4ade80"></i>tradestation-monarch <b>69</b><span class="sub">→ 44</span></span></div>
+      </div>
+      <div class="dual-legend"><span class="swatch"><span class="sw-line"></span>配置 · CONFIGURED (filesystem fingerprint)</span><span class="swatch"><span class="sw-line dashed"></span>啟動 · ACTIVATED (session JSONL)</span></div>
+    </section>
+
+    
+      <section class="card">
+        <h2>最大落差</h2>
+        <p class="card-sub">依配置 vs 啟動落差排序的項目。落差大 = 你配了但沒在用,最有機會用最少力氣補上的能力。</p>
+        <div class="gap-list">
+          <details class="gap-item gap-dir-under">
+            <summary>
+              <div class="gap-rank">1</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-under">用不夠 · UNDERUSED</span>
+                  <span class="gap-axis-name">skills</span>
+                  <span class="gap-target">tradestation-monarch</span>
+                </div>
+                <div class="gap-hint">`tradestation-monarch`：Skills 配置完整但實際觸發少。考慮重寫 SKILL.md 的 description，加入明確觸發場景。</div>
+                <div class="gap-meta">
+                  <span>· 配置 <b>100</b></span>
+                  <span>· 啟動 <b>0</b></span>
+                  <span>· 落差 <b>+100</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="點開看背後的 configured + activated 細節">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Skills 存在</span>
+          <span class="f-score">70/70</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">找到 4 個 SKILL.md</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Lint: frontmatter & token 衛生</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">frontmatter 合規 4/4</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">啟動 · ACTIVATED</div>
+                
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">Skill tool 呼叫</span>
+          <span class="f-score">0/100</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">Skill 從未觸發 (description 可能寫不夠好,或無安裝 skills)</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="gap-item gap-dir-under">
+            <summary>
+              <div class="gap-rank">2</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-under">用不夠 · UNDERUSED</span>
+                  <span class="gap-axis-name">context_hygiene</span>
+                  <span class="gap-target">tradestation-monarch</span>
+                </div>
+                <div class="gap-hint">`tradestation-monarch`：CLAUDE.md / settings 結構良好，但 session 中幾乎不用 @ 引用。在常用檔上養成 `@path` 習慣以聚焦 context。</div>
+                <div class="gap-meta">
+                  <span>· 配置 <b>70</b></span>
+                  <span>· 啟動 <b>19</b></span>
+                  <span>· 落差 <b>+51</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="點開看背後的 configured + activated 細節">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">User/Project 分工</span>
+          <span class="f-score">40/40</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">同時具備 project 與 user-space 設定 (分工良好)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">共享/個人設定區分</span>
+          <span class="f-score">0/30</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">未區分共享與個人設定</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">模組化引用</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">2 處模組化引用</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">啟動 · ACTIVATED</div>
+                
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">Read 效率 (低重複)</span>
+          <span class="f-score">19/50</span>
+        </div>
+        <div class="f-bar"><i style="width:37%"></i></div>
+        <div class="f-detail">83/132 為重複讀檔 (62.9%)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">@ 引用頻率</span>
+          <span class="f-score">0/50</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">0 處 @ 引用 / 821 user 訊息 (rate=0.00/msg)</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="gap-item gap-dir-over">
+            <summary>
+              <div class="gap-rank">3</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-over">用得很重 · OVER-ACTIVATED</span>
+                  <span class="gap-axis-name">automation</span>
+                  <span class="gap-target">tradestation-monarch</span>
+                </div>
+                <div class="gap-hint">`tradestation-monarch`：subagent 派遣次數超過配置面所反映的程度。你用 subagent 用得很重 — 建議把「為什麼會派遣」寫進 CLAUDE.md 或 subagent description,讓這個 workflow 不會在未來改設定時意外丟失。</div>
+                <div class="gap-meta">
+                  <span>· 配置 <b>75</b></span>
+                  <span>· 啟動 <b>100</b></span>
+                  <span>· 落差 <b>-25</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="點開看背後的 configured + activated 細節">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Hooks</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">偵測到 hooks 設定</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Subagents</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">7 個 subagent</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">自訂 slash commands</span>
+          <span class="f-score">0/25</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">未建立自訂命令</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Plugins</span>
+          <span class="f-score">15/15</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">偵測到 plugin 使用</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">啟動 · ACTIVATED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Subagent 派遣</span>
+          <span class="f-score">100/100</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">41 次 subagent 派遣 (Agent tool)</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="gap-item gap-dir-under">
+            <summary>
+              <div class="gap-rank">4</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-under">用不夠 · UNDERUSED</span>
+                  <span class="gap-axis-name">mcp</span>
+                  <span class="gap-target">tradestation-monarch</span>
+                </div>
+                <div class="gap-hint">`tradestation-monarch`：你設定了 MCP server，但實際被呼叫的比例偏低。檢查哪些 server 從未被使用，刪除或重新評估。</div>
+                <div class="gap-meta">
+                  <span>· 配置 <b>18</b></span>
+                  <span>· 啟動 <b>0</b></span>
+                  <span>· 落差 <b>+18</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="點開看背後的 configured + activated 細節">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIGURED</div>
+                
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">MCP server 數量</span>
+          <span class="f-score">18/50</span>
+        </div>
+        <div class="f-bar"><i style="width:36%"></i></div>
+        <div class="f-detail">1 個 MCP server</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">MCP 類型廣度</span>
+          <span class="f-score">0/50</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">無法辨識類別</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">啟動 · ACTIVATED</div>
+                
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">MCP tool 呼叫</span>
+          <span class="f-score">0/100</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">MCP server 從未被呼叫</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="gap-item gap-dir-over">
+            <summary>
+              <div class="gap-rank">5</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-over">用得很重 · OVER-ACTIVATED</span>
+                  <span class="gap-axis-name">claude_md</span>
+                  <span class="gap-target">tradestation-monarch</span>
+                </div>
+                <div class="gap-hint">`tradestation-monarch`：CLAUDE.md 配置不算滿分,但 user 糾正率極低。Claude 在實際使用中被指導得很好 — 你 prompt 寫得好,或 CLAUDE.md 比「配置覆蓋率」這個分數所反映的還有效。沒有需要立即動作的事。</div>
+                <div class="gap-meta">
+                  <span>· 配置 <b>84</b></span>
+                  <span>· 啟動 <b>100</b></span>
+                  <span>· 落差 <b>-16</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="點開看背後的 configured + activated 細節">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">CLAUDE.md 存在</span>
+          <span class="f-score">50/50</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">找到 CLAUDE.md, .claude\CLAUDE.md</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">@import 引用</span>
+          <span class="f-score">10/10</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">2 處 @ 引用</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Lint: 檔案大小</span>
+          <span class="f-score">15/15</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">6912 chars (合規)</div>
+      </div>
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">迭代證據</span>
+          <span class="f-score">9/25</span>
+        </div>
+        <div class="f-bar"><i style="width:36%"></i></div>
+        <div class="f-detail">3 次 git 修改 CLAUDE.md;0 處內容迭代訊號 (教訓 / 不要再 / 日期戳記)</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">啟動 · ACTIVATED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">指導生效度 (低糾正率)</span>
+          <span class="f-score">100/100</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">0/821 user 訊息含糾正 (0.0%) — 比例高 = CLAUDE.md 沒指導到</div>
+      </div>
+              </div>
+            </div>
+          </details></div>
+      </section>
+
+    <h2 style="margin: 32px 0 16px;">目標細節</h2>
+    
+      <section class="card target">
+        <div class="target-head">
+          <div>
+            <h3>tradestation-monarch</h3>
+            <code class="path">D:\project\tradestation-monarch</code>
+          </div>
+          <div class="big-score good">
+            <span class="num">69</span>
+          </div>
+        </div>
+        
+      <table class="gap-table">
+        <thead><tr><th>維度</th><th>配置</th><th>啟動</th><th>落差</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>CLAUDE.md</td>
+            <td><span class="pill good">84</span></td>
+            <td><span class="pill good">100</span></td>
+            <td><span class="pill good">-16</span></td>
+          </tr>
+          <tr>
+            <td>Skills</td>
+            <td><span class="pill good">100</span></td>
+            <td><span class="pill low">0</span></td>
+            <td><span class="pill low">+100</span></td>
+          </tr>
+          <tr>
+            <td>MCP</td>
+            <td><span class="pill low">18</span></td>
+            <td><span class="pill low">0</span></td>
+            <td><span class="pill mid">+18</span></td>
+          </tr>
+          <tr>
+            <td>自動化</td>
+            <td><span class="pill good">75</span></td>
+            <td><span class="pill good">100</span></td>
+            <td><span class="pill good">-25</span></td>
+          </tr>
+          <tr>
+            <td>上下文管理</td>
+            <td><span class="pill good">70</span></td>
+            <td><span class="pill low">19</span></td>
+            <td><span class="pill low">+51</span></td>
+          </tr></tbody>
+      </table>
+        <div style="margin-top: 18px;">
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">CLAUDE.md</span>
+              <span class="d-dual">
+                <span class="d-score good">84</span>
+                <span class="d-sep">/</span>
+                <span class="d-score good">100</span>
+                <span class="d-gap"><span class="pill good">-16</span></span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">CLAUDE.md 存在</span>
+          <span class="f-score">50/50</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">找到 CLAUDE.md, .claude\CLAUDE.md</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">@import 引用</span>
+          <span class="f-score">10/10</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">2 處 @ 引用</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Lint: 檔案大小</span>
+          <span class="f-score">15/15</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">6912 chars (合規)</div>
+      </div>
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">迭代證據</span>
+          <span class="f-score">9/25</span>
+        </div>
+        <div class="f-bar"><i style="width:36%"></i></div>
+        <div class="f-detail">3 次 git 修改 CLAUDE.md;0 處內容迭代訊號 (教訓 / 不要再 / 日期戳記)</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">啟動 · ACTIVATED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">指導生效度 (低糾正率)</span>
+          <span class="f-score">100/100</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">0/821 user 訊息含糾正 (0.0%) — 比例高 = CLAUDE.md 沒指導到</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">Skills</span>
+              <span class="d-dual">
+                <span class="d-score good">100</span>
+                <span class="d-sep">/</span>
+                <span class="d-score low">0</span>
+                <span class="d-gap"><span class="pill low">+100</span></span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Skills 存在</span>
+          <span class="f-score">70/70</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">找到 4 個 SKILL.md</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Lint: frontmatter & token 衛生</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">frontmatter 合規 4/4</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">啟動 · ACTIVATED</div>
+                
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">Skill tool 呼叫</span>
+          <span class="f-score">0/100</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">Skill 從未觸發 (description 可能寫不夠好,或無安裝 skills)</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">MCP</span>
+              <span class="d-dual">
+                <span class="d-score low">18</span>
+                <span class="d-sep">/</span>
+                <span class="d-score low">0</span>
+                <span class="d-gap"><span class="pill mid">+18</span></span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIGURED</div>
+                
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">MCP server 數量</span>
+          <span class="f-score">18/50</span>
+        </div>
+        <div class="f-bar"><i style="width:36%"></i></div>
+        <div class="f-detail">1 個 MCP server</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">MCP 類型廣度</span>
+          <span class="f-score">0/50</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">無法辨識類別</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">啟動 · ACTIVATED</div>
+                
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">MCP tool 呼叫</span>
+          <span class="f-score">0/100</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">MCP server 從未被呼叫</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">自動化</span>
+              <span class="d-dual">
+                <span class="d-score good">75</span>
+                <span class="d-sep">/</span>
+                <span class="d-score good">100</span>
+                <span class="d-gap"><span class="pill good">-25</span></span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Hooks</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">偵測到 hooks 設定</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Subagents</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">7 個 subagent</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">自訂 slash commands</span>
+          <span class="f-score">0/25</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">未建立自訂命令</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Plugins</span>
+          <span class="f-score">15/15</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">偵測到 plugin 使用</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">啟動 · ACTIVATED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">Subagent 派遣</span>
+          <span class="f-score">100/100</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">41 次 subagent 派遣 (Agent tool)</div>
+      </div>
+              </div>
+            </div>
+          </details>
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">上下文管理</span>
+              <span class="d-dual">
+                <span class="d-score good">70</span>
+                <span class="d-sep">/</span>
+                <span class="d-score low">19</span>
+                <span class="d-gap"><span class="pill low">+51</span></span>
+              </span>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">配置 · CONFIGURED</div>
+                
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">User/Project 分工</span>
+          <span class="f-score">40/40</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">同時具備 project 與 user-space 設定 (分工良好)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">共享/個人設定區分</span>
+          <span class="f-score">0/30</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">未區分共享與個人設定</div>
+      </div>
+      <div class="finding good">
+        <div class="f-head">
+          <span class="f-label">模組化引用</span>
+          <span class="f-score">30/30</span>
+        </div>
+        <div class="f-bar"><i style="width:100%"></i></div>
+        <div class="f-detail">2 處模組化引用</div>
+      </div>
+              </div>
+              <div class="col">
+                <div class="col-head">啟動 · ACTIVATED</div>
+                
+      <div class="finding mid">
+        <div class="f-head">
+          <span class="f-label">Read 效率 (低重複)</span>
+          <span class="f-score">19/50</span>
+        </div>
+        <div class="f-bar"><i style="width:37%"></i></div>
+        <div class="f-detail">83/132 為重複讀檔 (62.9%)</div>
+      </div>
+      <div class="finding low">
+        <div class="f-head">
+          <span class="f-label">@ 引用頻率</span>
+          <span class="f-score">0/50</span>
+        </div>
+        <div class="f-bar"><i style="width:0%"></i></div>
+        <div class="f-detail">0 處 @ 引用 / 821 user 訊息 (rate=0.00/msg)</div>
+      </div>
+              </div>
+            </div>
+          </details></div>
+        <p class="blind"><span>盲區</span>scan 只看磁碟上的配置。搭配 `agent-radar session` 量「實際運用」, 兩者落差就是改善空間。</p>
+        
+      </section>
+
+    <footer>agent-radar · configured vs activated · 落差即為改善空間</footer>
+  </div>
+</body>
+</html>
