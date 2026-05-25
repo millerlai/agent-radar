@@ -16,16 +16,18 @@ from . import __version__
 
 
 SUBCOMMANDS: dict[str, tuple[str, str]] = {
-    "scan":    ("agent_radar.scanner",
-                "Scan filesystem fingerprints (CLAUDE.md / skills / MCP / hooks / ...)"),
-    "session": ("agent_radar.session_scanner",
-                "Scan local session JSONL for actual-usage metrics"),
-    "report":  ("agent_radar.report",
-                "Build HTML radar report from scan / session / merged JSON"),
-    "usage":   ("agent_radar.usage.__main__",
-                "Score OTel events into usage.json"),
-    "merge":   ("agent_radar.usage.merge",
-                "Merge scan.json + usage.json into merged.json"),
+    "scan":          ("agent_radar.scanner",
+                      "Scan filesystem fingerprints (CLAUDE.md / skills / MCP / hooks / ...)"),
+    "session":       ("agent_radar.session_scanner",
+                      "Scan local session JSONL for actual-usage metrics"),
+    "report":        ("agent_radar.report",
+                      "Build HTML radar report from scan / session / merged JSON"),
+    "usage":         ("agent_radar.usage.__main__",
+                      "Score OTel events into usage.json"),
+    "merge":         ("agent_radar.usage.merge",
+                      "Merge scan.json + usage.json into merged.json"),
+    "install-skill": ("agent_radar.install_skill",
+                      "Install the /agent-radar-coach Claude Code skill into ~/.claude/skills/"),
 }
 
 

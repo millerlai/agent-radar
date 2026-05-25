@@ -99,6 +99,18 @@ agent-radar --help
 If `--version` looks older than the [latest PyPI release](https://pypi.org/project/claude-agent-radar/),
 upgrade with `pipx upgrade claude-agent-radar` or `uv tool upgrade claude-agent-radar`.
 
+### Install the coach skill (optional but recommended)
+
+```bash
+agent-radar install-skill
+```
+
+This copies the bundled Claude Code skill into `~/.claude/skills/agent-radar-coach/`.
+Open any Claude Code session and invoke `/agent-radar-coach` — it walks you
+through your scan / session results and applies targeted fixes one at a time
+(evidence-driven, ask-before-edit). Re-run with `--force` to overwrite an
+existing copy, or `--dest <dir>` to install elsewhere.
+
 If `pipx` / `uv tool install` succeeded but `agent-radar` is still
 `command not found`, your shell hasn't picked up the tool-bin dir yet
 — run `pipx ensurepath` or `uv tool update-shell`, then reopen the
