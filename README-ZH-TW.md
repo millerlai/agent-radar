@@ -232,6 +232,130 @@ agent-radar session --projects-dir /c/Users/<you>/.claude/projects -o session.js
 agent-radar report scan.json --session session.json -o report.html
 ```
 
+### 進階 · OpenTelemetry 路徑 (跨機器、hooks / plugins)
+
+`agent-radar usage` 是 **OpenTelemetry 版**的 activation 量測,跟
+`agent-radar session` 互為替代。它讀 Claude Code 透過 OTel 吐出的事件
+串流,產出跟 `merge` 預期格式相同的 `usage.json`。
+
+**大部分使用者不需要**走這條 —— `agent-radar session` 已經涵蓋從 JSONL
+能拿到的 ~90% 有用訊號,且不需任何前置設定。會想用 OTel 路徑只有以下情況:
+
+- 想看 **hook 觸發遙測**(JSONL 看不到 hook 是否真的觸發)
+- 想看 **plugin 載入事件**
+- 想看 **MCP 連線健康度**(connected / failed)
+- 想做**跨機器聚合**(透過中央 OTel collector)
+- 共用機器需要**按帳號過濾**事件
+
+| | `agent-radar session` | `agent-radar usage` |
+|---|---|---|
+| 前置設定 | 不用,裝完即跑 | 要先啟用 Claude Code telemetry |
+| 資料來源 | `~/.claude/projects/*.jsonl` | OTel events log (console exporter) |
+| hook / plugin 訊號 | ✗ | ✓ |
+| 跨機器 | 僅本機 | 是(透過中央 collector) |
+
+#### Step 1 · 開啟 Claude Code OTel 遙測
+
+啟動 `claude` **之前**設好以下環境變數。最簡單的設定是用 **console
+exporter** —— Claude Code 會把 JSON 事件串流寫到 `stderr`,你接到檔案
+即可。
+
+**macOS / Linux (bash / zsh):**
+
+```bash
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export OTEL_LOGS_EXPORTER=console
+export OTEL_METRICS_EXPORTER=console
+export OTEL_LOG_TOOL_DETAILS=1
+```
+
+**Windows PowerShell:**
+
+```powershell
+$env:CLAUDE_CODE_ENABLE_TELEMETRY = "1"
+$env:OTEL_LOGS_EXPORTER          = "console"
+$env:OTEL_METRICS_EXPORTER       = "console"
+$env:OTEL_LOG_TOOL_DETAILS       = "1"
+```
+
+要永久生效就寫進 shell rc 檔(`.bashrc`、`.zshrc`、PowerShell `$PROFILE`)。
+
+#### Step 2 · 把事件累積到 log 檔
+
+遙測只在 `claude` 跑著的時候會吐。要累積到值得分析的量,把 `stderr`
+導去一個 append-only 的 log:
+
+```bash
+mkdir -p ~/.agent-radar
+
+# macOS / Linux — 每次 Claude Code session 都附加到同一個 log
+claude 2>> ~/.agent-radar/otel-events.log
+```
+
+```powershell
+# Windows PowerShell — 一樣的概念
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.agent-radar" | Out-Null
+claude 2>> "$env:USERPROFILE\.agent-radar\otel-events.log"
+```
+
+一次短對話大約累積幾 KB;**通常需要 1-2 週的正常使用**才有足夠訊號做
+有意義的彙整。如果只關心最近一段時間,用後面 Step 3 的 `--since` /
+`--until` 切時間窗即可,不必輪替 log。
+
+**Log 維護**:這個檔是 append-only,Claude Code 不會自己縮小。建議
+週期性輪替,例如每週做:
+
+```bash
+mv otel-events.log otel-events.$(date +%Y%m%d).log
+: > otel-events.log
+```
+
+然後把輪替出來的那份餵給一次新的 `agent-radar usage` 跑。
+
+**Production-grade 替代方案**:把 `OTEL_*_EXPORTER` 指到真的 OTel
+collector(Jaeger / Honeycomb / Grafana Tempo …),而不是 console。
+團隊聚合的話,那個 collector 就是 agent-radar 讀取的單一來源。
+這裡示範的 console-to-file 是入門最低門檻。
+
+#### Step 3 · 把 log 計分成 usage.json
+
+Log 累積夠之後:
+
+```bash
+# 推薦:配 scan.json,讓比例有合理分母
+# (例如「設了 5 個 MCP,實際呼叫 2 個」而不是只看「2 次呼叫」)
+agent-radar usage \
+    --otel-log ~/.agent-radar/otel-events.log \
+    --scan scan.json \
+    --target my-repo \
+    -o usage.json
+
+# 最簡:不給 scan,比例會 fallback 成純事件計數
+agent-radar usage --otel-log ~/.agent-radar/otel-events.log -o usage.json
+```
+
+可選的旗標:
+
+| 旗標 | 作用 |
+|---|---|
+| `--scan scan.json` | 提供配置側分母,讓 usage 比例有意義 |
+| `--target <name>` | 從 `scan.json` 挑要對齊的 target(scan 有 >1 個 target 時必填) |
+| `--account <email-or-uuid>` | 只統計符合 `user.email` / `user.account_uuid` 的事件;共用機器時很有用 |
+| `--since 2026-05-01T00:00:00Z` | ISO 時間下界(含) |
+| `--until 2026-05-25T23:59:59Z` | ISO 時間上界(含) |
+
+#### Step 4 · Merge + 出報告
+
+OTel 路徑跑完之後接回標準 pipeline,`merge` 跟 `report` 用法完全一樣:
+
+```bash
+agent-radar merge scan.json usage.json -o merged.json
+agent-radar report --merged merged.json -o report.html
+```
+
+差別在於 HTML 雷達的 activation 側現在是從 OTel 量出來的,所以
+`automation` 軸會看到真正的 hook 觸發次數(`session` 那條看不到)。
+
 ### 輸出檔案說明
 
 | 檔案 | 來源 | 內容 |
