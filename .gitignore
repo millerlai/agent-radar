@@ -13,6 +13,9 @@ build/
 dist/
 *.egg-info/
 
+# Local-only credentials for one-off publishes (never committed)
+_token_*.txt
+
 # 掃描輸出 (本機產物,保留 sample-scan.json + report.html 作示範)
 scan.json
 session.json
