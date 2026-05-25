@@ -251,6 +251,130 @@ agent-radar session --projects-dir /c/Users/<you>/.claude/projects -o session.js
 agent-radar report scan.json --session session.json -o report.html
 ```
 
+### Advanced · OpenTelemetry path (cross-machine, hooks / plugins)
+
+`agent-radar usage` is the **OpenTelemetry-based** alternative to
+`agent-radar session`. It reads a stream of OTel events emitted by Claude
+Code and produces `usage.json` with the same shape `merge` expects. Most
+people don't need this — `agent-radar session` already covers ~90% of
+useful signals from JSONL with zero setup. Use the OTel path only when
+you want:
+
+- **Hook trigger telemetry** (JSONL doesn't expose hook firings)
+- **Plugin load events**
+- **MCP connection health** (connected / failed)
+- **Cross-machine aggregation** via a central OTel collector
+- **Per-account filtering** on a shared machine
+
+| | `agent-radar session` | `agent-radar usage` |
+|---|---|---|
+| Setup | None — just run | Enable Claude Code telemetry first |
+| Source | `~/.claude/projects/*.jsonl` | OTel events log (console exporter) |
+| Hook / plugin signals | ✗ | ✓ |
+| Cross-machine | Local only | Yes (via central collector) |
+
+#### Step 1 · Enable Claude Code OTel telemetry
+
+Set these environment variables before launching `claude`. The simplest
+setup is the **console exporter** — Claude Code writes a stream of JSON
+events to `stderr`, which you redirect to a log file.
+
+**macOS / Linux (bash / zsh):**
+
+```bash
+export CLAUDE_CODE_ENABLE_TELEMETRY=1
+export OTEL_LOGS_EXPORTER=console
+export OTEL_METRICS_EXPORTER=console
+export OTEL_LOG_TOOL_DETAILS=1
+```
+
+**Windows PowerShell:**
+
+```powershell
+$env:CLAUDE_CODE_ENABLE_TELEMETRY = "1"
+$env:OTEL_LOGS_EXPORTER          = "console"
+$env:OTEL_METRICS_EXPORTER       = "console"
+$env:OTEL_LOG_TOOL_DETAILS       = "1"
+```
+
+To make this permanent, add the exports to your shell rc file
+(`.bashrc`, `.zshrc`, PowerShell `$PROFILE`).
+
+#### Step 2 · Accumulate events into a log file
+
+Telemetry only fires while Claude Code is running. To accumulate signal
+worth analyzing, redirect `stderr` to an append-only log:
+
+```bash
+mkdir -p ~/.agent-radar
+
+# macOS / Linux — append every Claude Code session into the same log
+claude 2>> ~/.agent-radar/otel-events.log
+```
+
+```powershell
+# Windows PowerShell — same idea
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.agent-radar" | Out-Null
+claude 2>> "$env:USERPROFILE\.agent-radar\otel-events.log"
+```
+
+A single short conversation produces a few KB; meaningful aggregation
+usually needs **at least 1-2 weeks of normal usage**. If you only care
+about a recent window, use `--since` / `--until` later (see below) to
+slice the log without rotating it.
+
+**Log hygiene:** the file grows append-only and is never trimmed by
+Claude Code. Rotate periodically (e.g. weekly): `mv otel-events.log
+otel-events.$(date +%Y%m%d).log && : > otel-events.log` — and feed the
+rotated copy into a fresh `agent-radar usage` run.
+
+**Production-grade alternative:** instead of the console exporter, point
+`OTEL_*_EXPORTER` at a real OTel collector (Jaeger, Honeycomb, Grafana
+Tempo, …). For team rollups, that collector becomes the single source
+agent-radar reads from. The console-to-file path documented here is the
+minimum-viable starting point.
+
+#### Step 3 · Score the log into usage.json
+
+Once the log has some events:
+
+```bash
+# Recommended: pair with scan.json so ratios get proper denominators
+# (e.g. "5 MCP servers configured, 2 actually invoked" instead of "2 invocations")
+agent-radar usage \
+    --otel-log ~/.agent-radar/otel-events.log \
+    --scan scan.json \
+    --target my-repo \
+    -o usage.json
+
+# Minimal: no scan context — ratios fall back to raw event counts
+agent-radar usage --otel-log ~/.agent-radar/otel-events.log -o usage.json
+```
+
+Useful optional flags:
+
+| Flag | Effect |
+|---|---|
+| `--scan scan.json` | Provide configured-side denominators so usage ratios make sense |
+| `--target <name>` | Pick the target from `scan.json` to align with (required if scan has >1 target) |
+| `--account <email-or-uuid>` | Only count events whose `user.email` / `user.account_uuid` matches — useful on shared machines |
+| `--since 2026-05-01T00:00:00Z` | ISO time lower bound (inclusive) |
+| `--until 2026-05-25T23:59:59Z` | ISO time upper bound (inclusive) |
+
+#### Step 4 · Merge with scan and render
+
+The OTel path joins back into the standard pipeline — `merge` then
+`report` work the same as the JSONL path:
+
+```bash
+agent-radar merge scan.json usage.json -o merged.json
+agent-radar report --merged merged.json -o report.html
+```
+
+The HTML radar now reflects activation as measured via OTel (so the
+`automation` axis on the activated side picks up real hook firings,
+which `session` can't see).
+
 ### Output files
 
 | File | Produced by | Contents |
