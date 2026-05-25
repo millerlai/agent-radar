@@ -92,8 +92,12 @@ pip install -e .
 After install, verify:
 
 ```bash
+agent-radar --version   # prints e.g. `agent-radar 0.1.3`
 agent-radar --help
 ```
+
+If `--version` looks older than the [latest PyPI release](https://pypi.org/project/claude-agent-radar/),
+upgrade with `pipx upgrade claude-agent-radar` or `uv tool upgrade claude-agent-radar`.
 
 If `pipx` / `uv tool install` succeeded but `agent-radar` is still
 `command not found`, your shell hasn't picked up the tool-bin dir yet
