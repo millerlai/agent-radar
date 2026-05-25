@@ -88,8 +88,13 @@ pip install -e .
 裝完後驗證:
 
 ```bash
+agent-radar --version   # 例如印出 `agent-radar 0.1.3`
 agent-radar --help
 ```
+
+如果 `--version` 比 [PyPI 最新版](https://pypi.org/project/claude-agent-radar/)
+舊,跑 `pipx upgrade claude-agent-radar` 或 `uv tool upgrade claude-agent-radar`
+升級。
 
 如果 `pipx` / `uv tool install` 成功但 `agent-radar` 還是
 `command not found`,代表 shell 還沒讀到 tool-bin 目錄 ——
