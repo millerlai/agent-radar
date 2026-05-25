@@ -1,69 +1,135 @@
 ---
 name: agent-radar-coach
-description: Walk the user through their agent-radar scan and apply targeted, evidence-backed fixes to raise the six maturity dimensions (CLAUDE.md, Skills, MCP, Automation, Context Hygiene, Iteration) and the six usage dimensions (Tool diversity, Skill triggered, MCP triggered, Low correction, Context efficiency, Session volume). Use when the user says "improve my Claude Code setup", "fix my agent-radar gaps", "coach me through this scan / report", "tune my CLAUDE.md / skills / MCP / hooks", "raise my maturity score", "what should I do about this report", or hands you a scan.json / session.json / report.html and asks what to change next. Also triggers on Chinese phrases: "幫我改善 Claude Code 設定 / agent-radar 報告 / CLAUDE.md / skills / MCP".
+description: Diagnose and close the Activation Gap in the user's Claude Code setup using agent-radar. Five axes — CLAUDE.md, Skills, MCP, Automation, Context Hygiene — each compared as Configured (filesystem fingerprint) vs Activated (session JSONL telemetry). Gap = configured but unused = improvement headroom. Use when the user says "improve my Claude Code setup", "fix my agent-radar gaps", "coach me through this report", "tune my CLAUDE.md / skills / MCP / hooks", "raise my activation rate", "what should I do about this report", or hands you a scan.json / session.json / merged.json / report.html and asks what to change next. Also triggers on Chinese phrases: "幫我改善 Claude Code 設定 / agent-radar 報告 / CLAUDE.md / skills / MCP".
 ---
 
 # agent-radar-coach
 
-You coach the user through their `agent-radar` output. Your job is **not** to lecture about the framework — it is to turn one specific number in their JSON into one specific edit in their repo.
+The user's `agent-radar` output is in front of you. Your job is **not** to lecture about maturity scores — they don't exist in 0.2.0. Your job is to turn one specific gap number into one specific edit in their repo.
+
+The product thesis is: **agent-radar uniquely sees both what you configured AND what actually fires in sessions. The gap is the improvement.** Coach against that gap.
 
 ## Workflow
 
-1. **Gather data.** If the user hasn't already produced JSON, run:
+1. **Gather data.** If the user hasn't produced JSON, run:
    ```bash
-   agent-radar scan <target-repo> -o scan.json
+   agent-radar scan <repo-path> -o scan.json
    agent-radar session -o session.json
+   agent-radar merge scan.json session.json -o merged.json
    ```
-   If both files already exist, read them — do not re-run.
+   If `merged.json` exists, read it directly — don't re-run.
 
-2. **Pick targets.** Identify the **3 lowest-scoring dimensions** across `scan.json` and `session.json`. Ignore high ones. If `session_volume < 3`, refuse to coach on the session dimensions and tell the user to come back after more sessions — the data is too thin.
+2. **Pick targets.** In `merged.json`, sort `targets[*].scores` by `gap` (descending). The **top 3 axes with gap > 15** are your candidates. Ignore axes where:
+   - Gap < 15 (noise floor — already aligned)
+   - `usage` is `null` (no session data — flag it but don't coach)
+   - `sessions < 3` in the source `session.json` (too thin to judge — tell the user to come back)
 
-3. **Coach one gap at a time.** For each chosen dimension:
-   - State the **score and the specific evidence** (a count, a file path, a tool name — quoted from the JSON).
-   - Propose **the smallest edit** that moves the number.
-   - Wait for the user to say go.
+3. **Coach one gap at a time.** For each chosen axis:
+   - State **the specific number**: "Configured X, Activated Y, Gap = X−Y".
+   - Quote **specific evidence** from the findings (file path, count, tool name — straight from JSON; never invent).
+   - Propose **the smallest edit** that moves the activated side up.
+   - Wait for user "go".
    - Make the edit (Edit / Write).
-   - Re-run the relevant scan and report the new score.
+   - Re-run `agent-radar scan` + `session` + `merge` on the affected target.
+   - Report the new gap. One line. No fluff.
 
 ## Principles
 
-- **Evidence over advice.** Never say "consider adding more skills"; say "your `session.skill_calls=0` over 15 sessions and `~/.claude/skills/` has 3 SKILL.md files — `<name>` has a 12-char description, that's almost certainly why it never triggers."
+- **Evidence over advice.** Never "consider adding skills"; instead "your `skills.configured = 70` (5 SKILL.md installed) but `skills.activated = 0` over 47 sessions — `<name>` has a 12-char description, that's almost certainly why it never triggers."
 - **Smallest viable change.** A 3-line addition to CLAUDE.md beats a rewrite. A description tweak beats authoring a new skill.
 - **One change per turn.** Re-scan between changes so the user sees cause-and-effect.
 - **Ask before editing.** This is the user's config; you propose, they approve, you apply.
 - **Don't invent.** If a number isn't in the JSON, you cannot use it. No vibes.
 
-## Per-dimension playbook
+## Per-axis playbook
 
-### Configuration (from `agent-radar scan`)
+For each axis, the goal is to move the **activated** number up (rarely: lower the configured number when the user wants to remove dead config).
 
-| Low score on | What the JSON tells you | Smallest typical fix |
-|---|---|---|
-| `claude_md` | `findings[].score` per sub-check + `detail_args` | Add the missing section (e.g. a 5-line "Tone" block); split with `@import` if oversize; convert prose to imperative bullets |
-| `skills` | `findings.scan.skills.description.detail` — descriptions are weak | Rewrite the lowest-scoring SKILL.md `description` to include 3+ concrete trigger phrases |
-| `mcp` | `category_breadth` — which categories missing | Add one server in the missing category (or document why it isn't needed) |
-| `automation` | which sub-axis is 0 — hooks / subagents / commands / plugins | Add one of the missing type that solves a real friction the user mentions |
-| `context_hygiene` | `split` / `shared_personal` / `modular` flags | Move personal prefs to `~/.claude/`; gitignore `settings.local.json`; introduce one `@import` |
-| `iteration` | `scan.iteration.diversity` — only one kind of config touched in git | Suggest one type of config worth iterating (often skills or hooks) |
+### 1. `claude_md`
 
-### Usage (from `agent-radar session`)
+| | Source |
+|---|---|
+| Configured | scan findings: `scan.claude_md.exists`, `.import`, `.lint_size`, `.iteration` |
+| Activated | session finding `session.claude_md.guidance` = `(1 - correction_rate) × 100` |
 
-For each, **quote the user's actual counters** from `targets[].findings` and `targets[].unique_tools` / `tool_counter`.
+**Gap means**: CLAUDE.md exists but Claude keeps getting corrected in sessions — CLAUDE.md isn't doing its job.
 
-| Low score on | Evidence to extract | Fix path |
-|---|---|---|
-| `tool_diversity` | `unique_tools`, top-5 from detail | If `Bash` >60% of calls → recommend Read/Edit/Grep; if `TaskCreate` missing → suggest planning flow; if `Skill` missing → cross-link to `skill_triggered` |
-| `skill_triggered` | `skill_calls` count + `~/.claude/skills/` listing (you'll need to list it) | If installed >0 but triggered 0 → description rewrite (most common); if no skills installed → suggest installing one that matches user's workflow |
-| `mcp_triggered` | `mcp_calls` count; cross-reference `scan.json` MCP server list | List the configured-but-unused servers by name; recommend removing or fixing |
-| `low_correction` | `corrections` and `user_messages`, the regex matched | Sample 3-5 actual user messages from the JSONL (`~/.claude/projects/<encoded>/`) that contained corrections; bucket them; propose 1-3 CLAUDE.md rules covering the most frequent bucket |
-| `context_efficiency` | `reads_repeat` / `reads_total`; find the most-repeated path in `file_reads` | Recommend `@path` mention or a single `Read` with `offset`/`limit` instead of re-reading; if reading the same large file repeatedly → suggest splitting it |
-| `session_volume` | `sessions` + `total_messages` | If <3 sessions → "use Claude Code more before judging the other scores"; nothing else to fix here |
+**Fix flow**:
+1. Pull the actual user-correction messages from `~/.claude/projects/<encoded>/<session>.jsonl` (filter by `CORRECTION_RE` or just `^no\b` / `不對` patterns).
+2. Bucket them — typical groups: tone/style, missing facts, repeated tool-misuse.
+3. Pick the **most frequent bucket**. Propose 1-3 imperative lines to add to CLAUDE.md addressing it.
+4. Apply, re-scan, show the new correction-rate prediction.
+
+If `scan.claude_md.iteration.detail` shows `commits: 0, hits: 0`, also flag: **no iteration evidence at all** — this CLAUDE.md was written once and never refined. Coach them to add a "Lessons learned" or "Mistakes to avoid" section seeded from the corrections you just found.
+
+### 2. `skills`
+
+| | Source |
+|---|---|
+| Configured | scan: count of SKILL.md found + lint hygiene |
+| Activated | session: `Skill` tool dispatches × 10, capped 100 |
+
+**Gap means**: skills are installed but rarely / never triggered. The almost-always-cause is a weak `description:` field that the model can't match against user prompts.
+
+**Fix flow**:
+1. List the installed skills (glob `~/.claude/skills/*/SKILL.md` + `.claude/skills/*/SKILL.md`).
+2. Read each skill's frontmatter `description`. Rank by trigger phrase concreteness:
+   - Strong: lists 3+ specific user phrases ("when the user says X / asks for Y / hands you Z")
+   - Weak: vague verbs only ("manages files", "helps with code")
+3. Pick the weakest one. Rewrite its description with explicit trigger phrases borrowed from real user-message patterns in the JSONL.
+4. Apply, suggest the user start one test session that should trigger it, re-measure.
+
+### 3. `mcp`
+
+| | Source |
+|---|---|
+| Configured | scan: server count + category breadth |
+| Activated | session: `mcp__*` tool calls × 8, capped 100 |
+
+**Gap means**: you configured MCP servers but they're not being invoked.
+
+**Fix flow**:
+1. List configured servers from `.mcp.json` / `.claude/settings.json` `mcpServers`.
+2. Cross-reference against actual `mcp__*` tool names seen in JSONL — flag the **configured-but-unused** servers by name.
+3. Two paths:
+   - **Remove**: if the server isn't useful to the user's actual workflow, suggest pruning it from config (reduces noise, frees connection limits).
+   - **Activate**: if it should be useful, the user usually doesn't know it can be called. Add a 1-line CLAUDE.md hint like "Use mcp__linear__list_issues to check ticket status".
+
+### 4. `automation`
+
+| | Source |
+|---|---|
+| Configured | scan: hooks_present + subagent count + commands count + plugins flag |
+| Activated | session: `Agent` tool dispatches × 10, capped 100 (hooks/commands not visible in JSONL) |
+
+**Gap means**: most often, subagents are defined under `.claude/agents/*.md` but never dispatched.
+
+**Fix flow**:
+1. List `.claude/agents/*.md` — read the `description:` field of each.
+2. Subagent dispatch requires the parent agent to recognize when to delegate. Common failure: subagent description is too generic for Claude to know when to call it.
+3. Rewrite the weakest subagent description with concrete trigger conditions: "Use this subagent when [specific situation], NOT for [common confusion]".
+4. Note that hook firings and command invocations don't appear in JSONL — for those, recommend the user wire up OTel later if they want telemetry.
+
+### 5. `context_hygiene`
+
+| | Source |
+|---|---|
+| Configured | scan: user/project split + gitignore + @import count |
+| Activated | session: blend of `(1 - read_repeat_rate) × 50` + `mention_rate × 50` |
+
+**Gap means**: settings look modular, but inside sessions Claude is re-reading the same files or the user isn't using `@path` mentions.
+
+**Fix flow**:
+1. From `session.json`, find the most-repeated read file paths (the JSON doesn't directly emit this — you may need to re-read the JSONL counting Read tool calls per file_path).
+2. The two interventions:
+   - **High repeat**: same file read N times in one session. Coach the user to use `Read` with `offset` / `limit` once, or use `@file` to mention it explicitly so it stays in context.
+   - **Low @-mention rate**: the user types raw paths or descriptions instead of `@path`. Show them an example: instead of "look at scanner.py", type `@agent_radar/scanner.py — what's the iteration logic doing?`.
 
 ## Closing the loop
 
 After every accepted edit:
-1. Re-run `agent-radar scan` (or `session`) on the affected target.
-2. Show the user the dimension's old vs new score — one line, no fluff.
+1. Re-run the relevant scanner.
+2. Show old gap → new gap. One line.
 3. Move to the next gap, or stop if the user is satisfied.
 
-If you cannot improve a dimension without making the user uncomfortable (e.g. they don't want MCP), respect that and skip — record the choice and move on. Coaching ≠ scoring.
+If a gap can't be closed without the user changing their actual workflow (e.g. they genuinely don't use MCP and don't want to), respect that — propose removing the configured side instead of forcing activation. Activation Gap is bidirectional: closing it by deletion is valid.

@@ -2,14 +2,26 @@
 """
 agent-radar :: agent_radar.report
 =================================
-讀取 ``agent-radar scan`` 產出的 JSON，生成單檔 HTML 雷達圖診斷報告。
+HTML report renderer.
 
-JSON 採 i18n key 形式 (label_key / detail_key / detail_args / blind_spot key …);
-本檔透過 ``agent_radar.i18n`` 依 ``--lang`` 把它們渲染成顯示文字。
+0.2.0 framing: Activation Gap Diagnostic
+----------------------------------------
+``agent-radar scan`` outputs *configured-side facts* (what you set up).
+``agent-radar session`` outputs *activated-side facts* (what actually fires
+in JSONL sessions). The gap between the two is the product's main insight.
 
-用法:
-  agent-radar scan <paths...> -o scan.json
+CLI shapes:
   agent-radar report scan.json -o report.html
+    → "Configured Coverage" view (configured side only)
+  agent-radar report scan.json --session session.json -o report.html
+    → "Activation Gap" view (merged inline)
+  agent-radar report --merged merged.json -o report.html
+    → "Activation Gap" view (from pre-merged JSON)
+
+Producers emit only language-neutral keys; ``--lang en|zh`` controls text.
+The 0.1.x "Maturity Radar" / "Team Benchmark" / L0-L4 level scale are gone:
+they framed configured-ness as quality, which the tool cannot actually
+measure.
 """
 
 import argparse
@@ -18,134 +30,134 @@ import math
 from pathlib import Path
 
 from . import i18n as i18n_mod
+from .usage.merge import merge as _inline_merge
 
 
-# 色票：暗色「診斷儀表板」風
+# Series colors — kept from 0.1.x for visual continuity.
 PALETTE = ["#4ade80", "#38bdf8", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#2dd4bf", "#f87171"]
 
 
 # ----------------------------------------------------------------------------
-# i18n: UI chrome strings only (finding/dimension/level strings live in i18n.py)
+# UI chrome strings (finding/dimension/level strings live in i18n.py)
 # ----------------------------------------------------------------------------
 
 STRINGS = {
     "en": {
         "html_lang": "en",
-        "title_scan": "AI Agent Capability Boundary Diagnostic",
-        "title_merged": "AI Agent Capability Boundary · Config vs Usage",
-        "kicker_scan": "agent-radar · capability boundary scan",
-        "kicker_merged": "agent-radar · config vs usage",
-        "h1_scan_pre": "AI Agent ",
-        "h1_scan_em": "Capability Boundary",
-        "h1_scan_post": " Diagnostic Report",
-        "h1_merged_pre": "Capability ",
-        "h1_merged_em": "Config vs Usage",
-        "h1_merged_post": " Gap Diagnostic",
-        "sub_scan": ("Quantifies the Claude Code ecosystem's \"configuration maturity\" by "
-                     "scanning filesystem fingerprints (CLAUDE.md, skills, MCP, hooks, "
-                     "subagents, git history). Scores reflect setup completeness, not actual usage."),
-        "sub_merged": ("Overlays scanner's \"static configuration\" with OTel events' \"actual "
-                       "usage\" on the same axes. The area between solid and dashed lines is "
-                       "the capability-waste zone — what you configured but never used."),
-        "h2_maturity": "Maturity Radar",
-        "h2_team": "Team Benchmark",
-        "h2_usage": "Actual Usage Radar",
-        "h2_dual": "Dual-Track Radar · Config × Usage",
-        "h2_top_gaps": "Top Gaps",
-        "card_sub_usage": ("Reads local ~/.claude/projects/ JSONL logs and quantifies tool "
-                          "calls, Skill triggers, MCP calls, and user-correction rate within "
-                          "sessions. The gap from the configuration radar above is your "
-                          "improvement headroom."),
-        "card_sub_top_gaps": ("Top 5 items sorted by config vs usage gap. Large gap = configured "
-                              "but unused — the cheapest capability wins."),
-        "th_num": "#",
+        # Scan-only (configured coverage)
+        "title_scan": "Configured Coverage · agent-radar",
+        "kicker_scan": "agent-radar · configured fingerprint",
+        "h1_scan_pre": "Configured ",
+        "h1_scan_em": "Coverage",
+        "h1_scan_post": " — what you've set up",
+        "sub_scan": ("Counts the Claude Code artifacts on disk: CLAUDE.md, "
+                     "skills, MCP servers, hooks, subagents, commands, plugins, "
+                     "and gitignore hygiene. The score is configured coverage, "
+                     "NOT a quality grade — pair with `agent-radar session` to see "
+                     "what actually fires inside Claude Code."),
+        "h2_configured": "Configured Coverage Radar",
+        # Merged (activation gap)
+        "title_merged": "Activation Gap · agent-radar",
+        "kicker_merged": "agent-radar · configured vs activated",
+        "h1_merged_pre": "Activation ",
+        "h1_merged_em": "Gap",
+        "h1_merged_post": " — what you configured but never used",
+        "sub_merged": ("Overlays the configured side (solid lines) with the "
+                       "activated side (dashed lines) on the same five axes. "
+                       "The area between them is the capability waste zone."),
+        "h2_dual": "Activation Gap Radar",
+        "h2_top_gaps": "Biggest Gaps",
+        "h2_targets": "Per-Target Detail",
+        "card_sub_top_gaps": ("Top items by configured vs activated gap. Large gap "
+                              "= configured but unused; that's the cheapest "
+                              "capability to fix."),
+        # Table headers
         "th_target": "Target",
-        "th_overall": "Overall",
-        "th_level": "Level",
         "th_dim": "Dimension",
-        "th_config": "Config",
-        "th_usage": "Usage",
+        "th_config": "Configured",
+        "th_usage": "Activated",
         "th_gap": "Gap",
-        "team_avg_pre": "Team average maturity ",
-        "team_avg_post": " / 100",
+        # Labels
         "blind_label": "BLIND SPOT",
         "note_label": "NOTE",
-        "col_config": "CONFIG",
-        "col_usage": "USAGE",
+        "col_config": "CONFIGURED",
+        "col_usage": "ACTIVATED",
+        "direction_under": "UNDERUSED",
+        "direction_over":  "OVER-ACTIVATED",
+        "expand_hint": "Click to expand the underlying configured + activated findings",
         "no_findings": "No findings",
-        "no_usage_signals": "No usage signals",
-        "footer_scan": "agent-radar · static fingerprint scan · configuration completeness ≠ actual usage",
-        "footer_merged": "agent-radar · static fingerprint + OTel telemetry · config ≠ usage",
-        "dual_legend_cfg": "Config (static fingerprint)",
-        "dual_legend_use": "Usage (OTel events)",
-        "dual_legend_na": "iteration dim · USAGE = N/A (no corresponding signal)",
-        "gap_meta_config": "· config ",
-        "gap_meta_usage": "· usage ",
-        "gap_meta_gap": "· gap ",
+        "no_usage_signals": "No activation signals (no sessions logged?)",
         "no_targets": "No targets scanned.",
+        # Footer / legend
+        "footer_scan": "agent-radar · configured-side scan · pair with `session` for the activation view",
+        "footer_merged": "agent-radar · configured vs activated · gap = improvement headroom",
+        "dual_legend_cfg": "Configured (filesystem fingerprint)",
+        "dual_legend_use": "Activated (session JSONL)",
+        "gap_meta_config": "· configured ",
+        "gap_meta_usage": "· activated ",
+        "gap_meta_gap": "· gap ",
+        "pair_hint": ("Tip: run `agent-radar session -o session.json` and "
+                      "re-run report with `--session session.json` to see the "
+                      "activation gap."),
     },
     "zh": {
         "html_lang": "zh-Hant",
-        "title_scan": "AI Agent 能力邊界診斷",
-        "title_merged": "AI Agent 能力邊界診斷 · 配置 vs 運用",
-        "kicker_scan": "agent-radar · capability boundary scan",
-        "kicker_merged": "agent-radar · config vs usage",
-        "h1_scan_pre": "AI Agent ",
-        "h1_scan_em": "能力邊界",
-        "h1_scan_post": "診斷報告",
-        "h1_merged_pre": "能力",
-        "h1_merged_em": "配置 vs 運用",
-        "h1_merged_post": "落差診斷",
-        "sub_scan": ("透過掃描檔案系統指紋 (CLAUDE.md · skills · MCP · hooks · subagents · "
-                     "git history),量化 Claude Code 生態的「配置成熟度」。分數反映設定完整度,"
-                     "非實際運用度。"),
-        "sub_merged": ("把 scanner 的「靜態配置」與 OTel events 的「實際運用」疊在同一組軸上。"
-                       "實線與虛線之間的面積就是能力浪費區 — 你配了但沒在用的部分。"),
-        "h2_maturity": "成熟度雷達 · Maturity Radar",
-        "h2_team": "團隊排行 · Team Benchmark",
-        "h2_usage": "運用度雷達 · Actual Usage",
-        "h2_dual": "雙軌雷達 · Config × Usage",
-        "h2_top_gaps": "改善清單 · Top Gaps",
-        "card_sub_usage": ("讀取本機 ~/.claude/projects/ JSONL,量化 session 內真正發生的工具呼叫、"
-                          "Skill 觸發、MCP 呼叫、使用者糾正率。與上方配置雷達的「落差」即為改善空間。"),
-        "card_sub_top_gaps": ("依「配置 vs 運用」落差排序的前 5 項。落差大 = 你配了但沒在用,"
+        "title_scan": "配置覆蓋率 · agent-radar",
+        "kicker_scan": "agent-radar · configured fingerprint",
+        "h1_scan_pre": "配置",
+        "h1_scan_em": "覆蓋率",
+        "h1_scan_post": " — 你裝了什麼",
+        "sub_scan": ("計數磁碟上的 Claude Code 物件:CLAUDE.md、skills、MCP server、"
+                     "hooks、subagents、commands、plugins、gitignore 衛生。"
+                     "這是配置覆蓋率,**不是**品質分數—— 搭配 `agent-radar session` "
+                     "才看得到實際在 Claude Code 內觸發了什麼。"),
+        "h2_configured": "配置覆蓋率雷達",
+        "title_merged": "Activation Gap · agent-radar",
+        "kicker_merged": "agent-radar · configured vs activated",
+        "h1_merged_pre": "Activation ",
+        "h1_merged_em": "Gap",
+        "h1_merged_post": " — 你配了但沒在用的能力",
+        "sub_merged": ("把「配置側」(實線) 與「啟動側」(虛線) 疊在五大軸上。"
+                       "兩者之間的面積就是能力浪費區。"),
+        "h2_dual": "Activation Gap 雷達",
+        "h2_top_gaps": "最大落差",
+        "h2_targets": "目標細節",
+        "card_sub_top_gaps": ("依配置 vs 啟動落差排序的項目。落差大 = 你配了但沒在用,"
                               "最有機會用最少力氣補上的能力。"),
-        "th_num": "#",
         "th_target": "目標",
-        "th_overall": "總分",
-        "th_level": "層級",
         "th_dim": "維度",
         "th_config": "配置",
-        "th_usage": "運用",
+        "th_usage": "啟動",
         "th_gap": "落差",
-        "team_avg_pre": "團隊平均成熟度 ",
-        "team_avg_post": " / 100",
         "blind_label": "盲區",
         "note_label": "NOTE",
-        "col_config": "配置 · CONFIG",
-        "col_usage": "運用 · USAGE",
+        "col_config": "配置 · CONFIGURED",
+        "col_usage": "啟動 · ACTIVATED",
+        "direction_under": "用不夠 · UNDERUSED",
+        "direction_over":  "用得很重 · OVER-ACTIVATED",
+        "expand_hint": "點開看背後的 configured + activated 細節",
         "no_findings": "無 findings",
-        "no_usage_signals": "無 usage 訊號",
-        "footer_scan": "agent-radar · static fingerprint scan · 配置完整度 ≠ 實際運用度",
-        "footer_merged": "agent-radar · static fingerprint + OTel telemetry · 配置 ≠ 運用",
-        "dual_legend_cfg": "配置 · CONFIG (static fingerprint)",
-        "dual_legend_use": "運用 · USAGE (OTel events)",
-        "dual_legend_na": "iteration 維度 · USAGE = N/A (無對應訊號)",
-        "gap_meta_config": "· 配置 ",
-        "gap_meta_usage": "· 運用 ",
-        "gap_meta_gap": "· 落差 ",
+        "no_usage_signals": "無啟動訊號 (還沒有 session 紀錄?)",
         "no_targets": "未掃描任何目標。",
+        "footer_scan": "agent-radar · configured-side scan · 配合 `session` 看 activation",
+        "footer_merged": "agent-radar · configured vs activated · 落差即為改善空間",
+        "dual_legend_cfg": "配置 · CONFIGURED (filesystem fingerprint)",
+        "dual_legend_use": "啟動 · ACTIVATED (session JSONL)",
+        "gap_meta_config": "· 配置 ",
+        "gap_meta_usage": "· 啟動 ",
+        "gap_meta_gap": "· 落差 ",
+        "pair_hint": ("提示:跑 `agent-radar session -o session.json`, "
+                      "再加 `--session session.json` 重跑 report 就能看到 activation gap。"),
     },
 }
 
 
 def _t(lang, key):
-    """查表;查不到就 fallback 到 en。"""
     return STRINGS.get(lang, STRINGS["en"]).get(key, STRINGS["en"].get(key, key))
 
 
 # ----------------------------------------------------------------------------
-# Per-finding render helpers (drive everything through agent_radar.i18n).
+# Per-finding render helpers
 # ----------------------------------------------------------------------------
 
 def _finding_label(f: dict, lang: str) -> str:
@@ -157,7 +169,6 @@ def _finding_detail(f: dict, lang: str) -> str:
 
 
 def _blind_text(b, lang: str) -> str:
-    """blind_spots may be {"key", "args"} dicts (i18n keys) or legacy strings."""
     if isinstance(b, dict):
         return i18n_mod.t_blind(b.get("key", ""), b.get("args"), lang)
     return str(b)
@@ -168,22 +179,14 @@ def _hint_text(g: dict, lang: str) -> str:
                            g.get("hint_args"), lang)
 
 
-def _level_label(threshold: int, lang: str) -> str:
-    for th, entry in i18n_mod.LEVELS:
-        if th == threshold:
-            return entry.get(lang, entry["en"])
-    return ""
-
-
-def _normalise_dimensions(value) -> list[str]:
-    """Accepts either the new list-of-keys or the legacy {key: label} dict."""
+def _normalise_dimensions(value) -> list:
     if isinstance(value, dict):
         return list(value.keys())
     return list(value or [])
 
 
 # ----------------------------------------------------------------------------
-# SVG / table helpers
+# SVG helpers
 # ----------------------------------------------------------------------------
 
 def _polar_point(cx, cy, radius, value, i, n):
@@ -193,12 +196,7 @@ def _polar_point(cx, cy, radius, value, i, n):
 
 
 def radar_svg(targets, dim_keys, dim_labels, size=460, idx_offset=0):
-    """產生多目標疊圖的雷達圖 SVG。
-
-    viewBox 在 size 之外左右各加 pad 像素,給軸標籤水平延伸空間,
-    避免中文標籤被截掉。雷達主體位置由 cx/cy 平移補償。
-    """
-    # 100 才容得下 "Iteration & Maintenance" / "Skill triggers (actual)" 這類 ~23 字標籤
+    """Single-track radar (configured-only)."""
     pad = 100
     vb = size + pad * 2
     cx = cy = size / 2 + pad
@@ -206,15 +204,9 @@ def radar_svg(targets, dim_keys, dim_labels, size=460, idx_offset=0):
     n = len(dim_keys)
     rings = 4
 
-    def point(value, i):
-        ang = -math.pi / 2 + (2 * math.pi * i / n)
-        r = radius * (value / 100)
-        return cx + r * math.cos(ang), cy + r * math.sin(ang)
-
     parts = [f'<svg viewBox="0 0 {vb} {vb}" xmlns="http://www.w3.org/2000/svg" '
              f'role="img" class="radar">']
 
-    # 同心格線
     for ring in range(1, rings + 1):
         rr = radius * ring / rings
         pts = []
@@ -223,7 +215,6 @@ def radar_svg(targets, dim_keys, dim_labels, size=460, idx_offset=0):
             pts.append(f"{cx + rr*math.cos(ang):.1f},{cy + rr*math.sin(ang):.1f}")
         parts.append(f'<polygon points="{" ".join(pts)}" class="grid-ring"/>')
 
-    # 軸線 + 標籤
     for i, key in enumerate(dim_keys):
         ang = -math.pi / 2 + (2 * math.pi * i / n)
         ex, ey = cx + radius*math.cos(ang), cy + radius*math.sin(ang)
@@ -239,230 +230,26 @@ def radar_svg(targets, dim_keys, dim_labels, size=460, idx_offset=0):
             f'<text x="{lx:.1f}" y="{ly:.1f}" text-anchor="{anchor}" '
             f'class="axis-label" dominant-baseline="middle">{label}</text>')
 
-    # 每個目標一層多邊形
     for ti, t in enumerate(targets):
         color = PALETTE[(ti + idx_offset) % len(PALETTE)]
         pts = []
         for i, key in enumerate(dim_keys):
-            x, y = point(t["scores"].get(key, 0), i)
+            x, y = _polar_point(cx, cy, radius, t["scores"].get(key, 0), i, n)
             pts.append(f"{x:.1f},{y:.1f}")
         parts.append(
             f'<polygon points="{" ".join(pts)}" fill="{color}" '
             f'fill-opacity="0.12" stroke="{color}" stroke-width="2.5" '
             f'class="series" style="--c:{color}"/>')
         for i, key in enumerate(dim_keys):
-            x, y = point(t["scores"].get(key, 0), i)
+            x, y = _polar_point(cx, cy, radius, t["scores"].get(key, 0), i, n)
             parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="{color}"/>')
 
     parts.append('</svg>')
     return "\n".join(parts)
 
 
-def findings_html(target, dim_labels, lang):
-    """單一目標的維度明細手風琴。"""
-    by_dim = {}
-    for f in target["findings"]:
-        by_dim.setdefault(f["dimension"], []).append(f)
-
-    blocks = []
-    for dim, score in target["scores"].items():
-        rows = []
-        for f in by_dim.get(dim, []):
-            ratio = (f["score"] / f["weight"]) if f["weight"] else 0
-            state = "good" if ratio >= 0.66 else ("mid" if ratio >= 0.33 else "low")
-            rows.append(f"""
-              <div class="finding {state}">
-                <div class="f-head">
-                  <span class="f-label">{_finding_label(f, lang)}</span>
-                  <span class="f-score">{f['score']:.0f}/{f['weight']:.0f}</span>
-                </div>
-                <div class="f-bar"><i style="width:{ratio*100:.0f}%"></i></div>
-                <div class="f-detail">{_finding_detail(f, lang)}</div>
-              </div>""")
-        tone = "good" if score >= 60 else ("mid" if score >= 30 else "low")
-        blocks.append(f"""
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">{dim_labels[dim]}</span>
-              <span class="d-score {tone}">{score:.0f}</span>
-            </summary>
-            <div class="findings">{''.join(rows)}</div>
-          </details>""")
-    return "".join(blocks)
-
-
-def build_usage_section(session_data, lang="en"):
-    """生成「實際運用度」雷達卡 (來自 agent-radar session 輸出)。"""
-    if not session_data:
-        return ""
-    dim_keys = _normalise_dimensions(session_data.get("usage_dimensions", {}))
-    targets = session_data.get("targets", [])
-    if not targets or not dim_keys:
-        return ""
-
-    dim_labels = i18n_mod.dimensions_for(dim_keys, lang)
-    radar = radar_svg(targets, dim_keys, dim_labels, idx_offset=3)
-
-    legend = "".join(
-        f'<span class="leg"><i style="background:{PALETTE[(i+3)%len(PALETTE)]}"></i>'
-        f'{t["name"]} <b>{t["overall"]:.0f}</b></span>'
-        for i, t in enumerate(targets))
-
-    blind = "".join(
-        f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{_blind_text(b, lang)}</p>'
-        for b in session_data.get("blind_spots", []))
-
-    # 個別 target 的明細
-    rows = []
-    for t in targets:
-        finding_rows = []
-        for f in t["findings"]:
-            ratio = (f["score"] / f["weight"]) if f["weight"] else 0
-            state = "good" if ratio >= 0.66 else ("mid" if ratio >= 0.33 else "low")
-            finding_rows.append(f"""
-              <div class="finding {state}">
-                <div class="f-head">
-                  <span class="f-label">{_finding_label(f, lang)}</span>
-                  <span class="f-score">{f['score']:.0f}/{f['weight']:.0f}</span>
-                </div>
-                <div class="f-bar"><i style="width:{ratio*100:.0f}%"></i></div>
-                <div class="f-detail">{_finding_detail(f, lang)}</div>
-              </div>""")
-        rows.append(f"""
-          <details class="dim-block">
-            <summary>
-              <span class="d-name">{t['name']}</span>
-              <span class="d-score {('good' if t['overall']>=60 else 'mid' if t['overall']>=30 else 'low')}">{t['overall']:.0f}</span>
-            </summary>
-            <div class="findings">{''.join(finding_rows)}</div>
-          </details>""")
-
-    return f"""
-    <section class="card">
-      <h2>{_t(lang,"h2_usage")}</h2>
-      <p class="card-sub">{_t(lang,"card_sub_usage")}</p>
-      <div class="radar-wrap">
-        {radar}
-        <div class="legend">{legend}</div>
-      </div>
-      <div style="margin-top: 22px;">{''.join(rows)}</div>
-      {blind}
-    </section>"""
-
-
-def build_html(data, session_data=None, lang="en"):
-    dim_keys = _normalise_dimensions(data["dimensions"])
-    dim_labels = i18n_mod.dimensions_for(dim_keys, lang)
-    targets = data["targets"]
-
-    if not targets:
-        return f"<html><body>{_t(lang,'no_targets')}</body></html>"
-
-    is_team = len(targets) > 1
-    team_avg = {}
-    for k in dim_keys:
-        vals = [t["scores"].get(k, 0) for t in targets]
-        team_avg[k] = round(sum(vals) / len(vals), 1)
-    team_overall = round(sum(team_avg.values()) / len(team_avg), 1)
-
-    radar = radar_svg(targets, dim_keys, dim_labels)
-
-    legend = "".join(
-        f'<span class="leg"><i style="background:{PALETTE[i%len(PALETTE)]}"></i>'
-        f'{t["name"]} <b>{t["overall"]:.0f}</b></span>'
-        for i, t in enumerate(targets))
-
-    # --- 排行 (團隊) ---
-    ranking = ""
-    if is_team:
-        ranked = sorted(targets, key=lambda x: x["overall"], reverse=True)
-        rows = "".join(
-            f"""<tr>
-                  <td class="rank">{i+1}</td>
-                  <td>{t['name']}</td>
-                  <td><span class="pill {('good' if t['overall']>=60 else 'mid' if t['overall']>=30 else 'low')}">{t['overall']:.0f}</span></td>
-                  <td class="lvl">{_level_label(t.get('level_threshold', 0), lang)}</td>
-                </tr>""" for i, t in enumerate(ranked))
-        ranking = f"""
-        <section class="card">
-          <h2>{_t(lang,"h2_team")}</h2>
-          <table class="rank-table">
-            <thead><tr><th>{_t(lang,"th_num")}</th><th>{_t(lang,"th_target")}</th><th>{_t(lang,"th_overall")}</th><th>{_t(lang,"th_level")}</th></tr></thead>
-            <tbody>{rows}</tbody>
-          </table>
-          <p class="team-avg">{_t(lang,"team_avg_pre")}<b>{team_overall:.0f}</b>{_t(lang,"team_avg_post")}</p>
-        </section>"""
-
-    # --- 個別目標明細 ---
-    details = "".join(f"""
-      <section class="card target">
-        <div class="target-head">
-          <div>
-            <h3>{t['name']}</h3>
-            <code class="path">{t['path']}</code>
-          </div>
-          <div class="big-score {('good' if t['overall']>=60 else 'mid' if t['overall']>=30 else 'low')}">
-            <span class="num">{t['overall']:.0f}</span>
-            <span class="lvl-tag">{_level_label(t.get('level_threshold', 0), lang)}</span>
-          </div>
-        </div>
-        {findings_html(t, dim_labels, lang)}
-        {"".join(f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{_blind_text(b, lang)}</p>' for b in t.get('blind_spots', []))}
-      </section>""" for t in targets)
-
-    # --- 層級量尺 ---
-    level_thresholds = data.get("level_thresholds")
-    if level_thresholds is None:
-        level_thresholds = [th for th, _ in i18n_mod.LEVELS]
-    level_scale = "".join(
-        _level_scale_item(th, lang) for th in level_thresholds)
-
-    return _scaffold_html(
-        lang=lang,
-        title=_t(lang, "title_scan"),
-        body=f"""
-  <div class="wrap">
-    <header class="masthead">
-      <div class="kicker">{_t(lang,"kicker_scan")}</div>
-      <h1>{_t(lang,"h1_scan_pre")}<span class="em">{_t(lang,"h1_scan_em")}</span>{_t(lang,"h1_scan_post")}</h1>
-      <p class="sub">{_t(lang,"sub_scan")}</p>
-    </header>
-
-    <section class="card">
-      <h2>{_t(lang,"h2_maturity")}</h2>
-      <div class="radar-wrap">
-        {radar}
-        <div class="legend">{legend}</div>
-      </div>
-      <div class="scale">{level_scale}</div>
-    </section>
-
-    {ranking}
-
-    {build_usage_section(session_data, lang=lang)}
-
-    {details}
-
-    <footer>{_t(lang,"footer_scan")}</footer>
-  </div>""",
-        extra_css="")
-
-
-def _level_scale_item(threshold: int, lang: str) -> str:
-    """Render one level chip in the maturity scale strip."""
-    label = _level_label(threshold, lang)
-    head = label.split("·")[0].strip() if "·" in label else label
-    tail = label.split("·")[1].strip() if "·" in label else ""
-    return (f'<div class="lv"><b>{head}</b><span>{tail}</span>'
-            f'<i>{threshold}+</i></div>')
-
-
 def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0):
-    """雙軌雷達:每個 target 同時畫實線 (config) + 虛線 (usage)。
-
-    iteration 維度的 usage 為 None,usage polygon 以開口形式繞過 iteration
-    軸,避免假裝 0 分。
-    """
+    """Dual-track radar: solid (configured) + dashed (activated) per target."""
     pad = 100
     vb = size + pad * 2
     cx = cy = size / 2 + pad
@@ -481,10 +268,7 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
             pts.append(f"{cx + rr*math.cos(ang):.1f},{cy + rr*math.sin(ang):.1f}")
         parts.append(f'<polygon points="{" ".join(pts)}" class="grid-ring"/>')
 
-    iteration_idx = None
     for i, key in enumerate(dim_keys):
-        if key == "iteration":
-            iteration_idx = i
         ang = -math.pi / 2 + (2 * math.pi * i / n)
         ex, ey = cx + radius*math.cos(ang), cy + radius*math.sin(ang)
         parts.append(f'<line x1="{cx}" y1="{cy}" x2="{ex:.1f}" y2="{ey:.1f}" class="axis"/>')
@@ -524,9 +308,8 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
             x, y = _polar_point(cx, cy, radius, v, i, n)
             usage_pts.append(f"{x:.1f},{y:.1f}")
         if len(usage_pts) >= 2:
-            shape_tag = "polygon" if iteration_idx is None else "polyline"
             parts.append(
-                f'<{shape_tag} points="{" ".join(usage_pts)}" fill="none" '
+                f'<polygon points="{" ".join(usage_pts)}" fill="none" '
                 f'stroke="{color}" stroke-width="2" stroke-dasharray="6 4" '
                 f'stroke-opacity="0.95" class="usage-series"/>')
         for i, key in enumerate(dim_keys):
@@ -538,24 +321,66 @@ def dual_radar_svg(merged_targets, dim_keys, dim_labels, size=460, idx_offset=0)
                 f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3" fill="none" '
                 f'stroke="{color}" stroke-width="1.6"/>')
 
-    if iteration_idx is not None:
-        ang = -math.pi / 2 + (2 * math.pi * iteration_idx / n)
-        nx = cx + (radius * 0.5) * math.cos(ang)
-        ny = cy + (radius * 0.5) * math.sin(ang)
-        parts.append(
-            f'<text x="{nx:.1f}" y="{ny:.1f}" text-anchor="middle" '
-            f'dominant-baseline="middle" class="na-tag">N/A</text>')
-
     parts.append('</svg>')
     return "\n".join(parts)
 
 
+# ----------------------------------------------------------------------------
+# Findings accordion
+# ----------------------------------------------------------------------------
+
+def _finding_row(f: dict, lang: str) -> str:
+    weight = f.get("weight") or 0
+    score = f.get("score") or 0
+    ratio = (score / weight) if weight else 0
+    state = "good" if ratio >= 0.66 else ("mid" if ratio >= 0.33 else "low")
+    return f"""
+      <div class="finding {state}">
+        <div class="f-head">
+          <span class="f-label">{_finding_label(f, lang)}</span>
+          <span class="f-score">{score:.0f}/{weight:.0f}</span>
+        </div>
+        <div class="f-bar"><i style="width:{ratio*100:.0f}%"></i></div>
+        <div class="f-detail">{_finding_detail(f, lang)}</div>
+      </div>"""
+
+
+def findings_html(target, dim_labels, lang):
+    """Single-track (scan-only) findings accordion."""
+    by_dim = {}
+    for f in target["findings"]:
+        by_dim.setdefault(f["dimension"], []).append(f)
+
+    blocks = []
+    for dim, score in target["scores"].items():
+        rows = "".join(_finding_row(f, lang) for f in by_dim.get(dim, []))
+        tone = "good" if score >= 60 else ("mid" if score >= 30 else "low")
+        blocks.append(f"""
+          <details class="dim-block">
+            <summary>
+              <span class="d-name">{dim_labels[dim]}</span>
+              <span class="d-score {tone}">{score:.0f}</span>
+            </summary>
+            <div class="findings">{rows}</div>
+          </details>""")
+    return "".join(blocks)
+
+
 def _gap_pill(gap):
+    """Color the gap by direction + magnitude.
+
+    Positive gap = configured exceeds activated = UNDERUSED:
+      ≤15  → good (basically aligned), ≤35 → mid (attention), >35 → low (action)
+    Negative gap = activated exceeds configured = OVER-ACTIVATED (a win signal):
+      always shown as ``good`` regardless of magnitude.
+    """
     if gap is None:
         return '<span class="pill mid">—</span>'
+    if gap <= 0:
+        # over-activated: positive signal, always good-toned
+        return f'<span class="pill good">{gap:.0f}</span>'
     cls = "good" if gap <= 15 else ("mid" if gap <= 35 else "low")
-    sign = "+" if gap > 0 else ""
-    return f'<span class="pill {cls}">{sign}{gap:.0f}</span>'
+    return f'<span class="pill {cls}">+{gap:.0f}</span>'
 
 
 def _score_pill(value):
@@ -583,40 +408,64 @@ def gap_table_html(target, dim_labels, lang="en"):
 
 
 def top_gaps_html(merged_targets, lang="en"):
-    """整份報告中跨 target 撿出落差最大的前 5 項。"""
+    """Render top gaps with click-to-expand drill-down of underlying findings."""
     flat = []
     for t in merged_targets:
         for g in t.get("top_gaps", []):
             flat.append({**g, "target": t["name"]})
-    flat.sort(key=lambda r: r["gap"], reverse=True)
+    # cross-target sort by |gap| (each target's top_gaps is already abs-sorted)
+    flat.sort(key=lambda r: r.get("abs_gap", abs(r["gap"])), reverse=True)
     top = flat[:5]
     if not top:
         return ""
 
-    rows = "".join(f"""
-      <li class="gap-item">
-        <div class="gap-rank">{i+1}</div>
-        <div class="gap-body">
-          <div class="gap-hint">{_hint_text(g, lang)}</div>
-          <div class="gap-meta">
-            <span>{g['target']}</span>
-            <span>{_t(lang,"gap_meta_config")}<b>{g['config']:.0f}</b></span>
-            <span>{_t(lang,"gap_meta_usage")}<b>{(f"{g['usage']:.0f}" if g['usage'] is not None else 'N/A')}</b></span>
-            <span>{_t(lang,"gap_meta_gap")}<b>{g['gap']:.0f}</b></span>
-          </div>
-        </div>
-      </li>""" for i, g in enumerate(top))
+    def _one(i: int, g: dict) -> str:
+        direction = g.get("direction", "under" if g["gap"] > 0 else "over")
+        gap_sign = f"+{g['gap']:.0f}" if g["gap"] > 0 else f"{g['gap']:.0f}"
+        usage_str = (f"{g['usage']:.0f}" if g["usage"] is not None else "N/A")
+        cfg_rows = "".join(_finding_row(f, lang) for f in g.get("config_findings", []))
+        use_rows = "".join(_finding_row(f, lang) for f in g.get("usage_findings", []))
+        return f"""
+          <details class="gap-item gap-dir-{direction}">
+            <summary>
+              <div class="gap-rank">{i+1}</div>
+              <div class="gap-summary-body">
+                <div class="gap-headline">
+                  <span class="gap-tag gap-tag-{direction}">{_t(lang, f'direction_{direction}')}</span>
+                  <span class="gap-axis-name">{g['dimension']}</span>
+                  <span class="gap-target">{g['target']}</span>
+                </div>
+                <div class="gap-hint">{_hint_text(g, lang)}</div>
+                <div class="gap-meta">
+                  <span>{_t(lang,"gap_meta_config")}<b>{g['config']:.0f}</b></span>
+                  <span>{_t(lang,"gap_meta_usage")}<b>{usage_str}</b></span>
+                  <span>{_t(lang,"gap_meta_gap")}<b>{gap_sign}</b></span>
+                </div>
+              </div>
+              <div class="gap-expand-icon" aria-label="{_t(lang,'expand_hint')}">▾</div>
+            </summary>
+            <div class="dual-findings">
+              <div class="col">
+                <div class="col-head">{_t(lang,"col_config")}</div>
+                {cfg_rows or f'<div class="f-detail">{_t(lang,"no_findings")}</div>'}
+              </div>
+              <div class="col">
+                <div class="col-head">{_t(lang,"col_usage")}</div>
+                {use_rows or f'<div class="f-detail">{_t(lang,"no_usage_signals")}</div>'}
+              </div>
+            </div>
+          </details>"""
 
+    rows = "".join(_one(i, g) for i, g in enumerate(top))
     return f"""
       <section class="card">
         <h2>{_t(lang,"h2_top_gaps")}</h2>
         <p class="card-sub">{_t(lang,"card_sub_top_gaps")}</p>
-        <ol class="gap-list">{rows}</ol>
+        <div class="gap-list">{rows}</div>
       </section>"""
 
 
 def merged_findings_html(target, dim_labels, lang="en"):
-    """合併視角:每個維度展開後左右並列 config / usage findings。"""
     cfg_by = target.get("config_findings_by_dim", {})
     use_by = target.get("usage_findings_by_dim", {})
     blocks = []
@@ -654,23 +503,147 @@ def merged_findings_html(target, dim_labels, lang="en"):
     return "".join(blocks)
 
 
-def _finding_row(f: dict, lang: str) -> str:
-    weight = f.get("weight") or 0
-    score = f.get("score") or 0
-    ratio = (score / weight) if weight else 0
-    state = "good" if ratio >= 0.66 else ("mid" if ratio >= 0.33 else "low")
-    return f"""
-      <div class="finding {state}">
-        <div class="f-head">
-          <span class="f-label">{_finding_label(f, lang)}</span>
-          <span class="f-score">{score:.0f}/{weight:.0f}</span>
+# ----------------------------------------------------------------------------
+# Top-level HTML builders
+# ----------------------------------------------------------------------------
+
+def build_html(data, lang="en"):
+    """Scan-only report — configured coverage (no activation data)."""
+    dim_keys = _normalise_dimensions(data["dimensions"])
+    dim_labels = i18n_mod.dimensions_for(dim_keys, lang)
+    targets = data["targets"]
+
+    if not targets:
+        return f"<html><body>{_t(lang,'no_targets')}</body></html>"
+
+    radar = radar_svg(targets, dim_keys, dim_labels)
+
+    legend = "".join(
+        f'<span class="leg"><i style="background:{PALETTE[i%len(PALETTE)]}"></i>'
+        f'{t["name"]} <b>{t["overall"]:.0f}</b></span>'
+        for i, t in enumerate(targets))
+
+    details = "".join(f"""
+      <section class="card target">
+        <div class="target-head">
+          <div>
+            <h3>{t['name']}</h3>
+            <code class="path">{t['path']}</code>
+          </div>
+          <div class="big-score {('good' if t['overall']>=60 else 'mid' if t['overall']>=30 else 'low')}">
+            <span class="num">{t['overall']:.0f}</span>
+          </div>
         </div>
-        <div class="f-bar"><i style="width:{ratio*100:.0f}%"></i></div>
-        <div class="f-detail">{_finding_detail(f, lang)}</div>
-      </div>"""
+        {findings_html(t, dim_labels, lang)}
+        {"".join(f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{_blind_text(b, lang)}</p>' for b in t.get('blind_spots', []))}
+      </section>""" for t in targets)
+
+    return _scaffold_html(
+        lang=lang,
+        title=_t(lang, "title_scan"),
+        body=f"""
+  <div class="wrap">
+    <header class="masthead">
+      <div class="kicker">{_t(lang,"kicker_scan")}</div>
+      <h1>{_t(lang,"h1_scan_pre")}<span class="em">{_t(lang,"h1_scan_em")}</span>{_t(lang,"h1_scan_post")}</h1>
+      <p class="sub">{_t(lang,"sub_scan")}</p>
+    </header>
+
+    <section class="card">
+      <h2>{_t(lang,"h2_configured")}</h2>
+      <div class="radar-wrap">
+        {radar}
+        <div class="legend">{legend}</div>
+      </div>
+      <p class="pair-hint">{_t(lang,"pair_hint")}</p>
+    </section>
+
+    {details}
+
+    <footer>{_t(lang,"footer_scan")}</footer>
+  </div>""",
+        extra_css="")
 
 
-# ----- shared HTML scaffolding ---------------------------------------------
+def build_merged_html(merged, lang="en"):
+    """Activation Gap view — dual-track radar of configured vs activated."""
+    dim_keys = _normalise_dimensions(merged["dimensions"])
+    dim_labels = i18n_mod.dimensions_for(dim_keys, lang)
+    targets = merged["targets"]
+
+    if not targets:
+        return f"<html><body>{_t(lang,'no_targets')}</body></html>"
+
+    radar = dual_radar_svg(targets, dim_keys, dim_labels)
+
+    def _legend_item(i: int, t: dict) -> str:
+        usage_overall = t.get("usage_overall")
+        usage_str = f"{usage_overall:.0f}" if usage_overall is not None else "N/A"
+        return (
+            f'<span class="leg"><i style="background:{PALETTE[i%len(PALETTE)]}"></i>'
+            f'{t["name"]} '
+            f'<b>{(t["config_overall"] or 0):.0f}</b>'
+            f'<span class="sub">→ {usage_str}</span>'
+            f'</span>'
+        )
+
+    legend = "".join(_legend_item(i, t) for i, t in enumerate(targets))
+
+    dual_legend = (
+        '<div class="dual-legend">'
+        f'<span class="swatch"><span class="sw-line"></span>{_t(lang,"dual_legend_cfg")}</span>'
+        f'<span class="swatch"><span class="sw-line dashed"></span>{_t(lang,"dual_legend_use")}</span>'
+        '</div>')
+
+    target_sections = "".join(f"""
+      <section class="card target">
+        <div class="target-head">
+          <div>
+            <h3>{t['name']}</h3>
+            <code class="path">{t['path']}</code>
+          </div>
+          <div class="big-score {('good' if (t['config_overall'] or 0)>=60 else 'mid' if (t['config_overall'] or 0)>=30 else 'low')}">
+            <span class="num">{(t['config_overall'] or 0):.0f}</span>
+          </div>
+        </div>
+        {gap_table_html(t, dim_labels, lang=lang)}
+        <div style="margin-top: 18px;">{merged_findings_html(t, dim_labels, lang=lang)}</div>
+        {"".join(f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{_blind_text(b, lang)}</p>' for b in t.get('blind_spots', []))}
+        {"".join(f'<p class="blind"><span>{_t(lang,"note_label")}</span>{n}</p>' for n in t.get('notes', []))}
+      </section>""" for t in targets)
+
+    body = f"""
+  <div class="wrap">
+    <header class="masthead">
+      <div class="kicker">{_t(lang,"kicker_merged")}</div>
+      <h1>{_t(lang,"h1_merged_pre")}<span class="em">{_t(lang,"h1_merged_em")}</span>{_t(lang,"h1_merged_post")}</h1>
+      <p class="sub">{_t(lang,"sub_merged")}</p>
+    </header>
+
+    <section class="card">
+      <h2>{_t(lang,"h2_dual")}</h2>
+      <div class="radar-wrap">
+        {radar}
+        <div class="legend">{legend}</div>
+      </div>
+      {dual_legend}
+    </section>
+
+    {top_gaps_html(targets, lang=lang)}
+
+    <h2 style="margin: 32px 0 16px;">{_t(lang,"h2_targets")}</h2>
+    {target_sections}
+
+    <footer>{_t(lang,"footer_merged")}</footer>
+  </div>"""
+
+    return _scaffold_html(lang=lang, title=_t(lang, "title_merged"),
+                          body=body, extra_css=_MERGED_EXTRA_CSS)
+
+
+# ----------------------------------------------------------------------------
+# CSS scaffolding
+# ----------------------------------------------------------------------------
 
 _BASE_CSS = """
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
@@ -702,6 +675,9 @@ _BASE_CSS = """
   h2 { font-size: 18px; margin-bottom: 18px; display: flex; align-items: center; gap: 10px; }
   h2::before { content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
   .card-sub { color: var(--ink-dim); font-size: 13.5px; max-width: 70ch; margin: -8px 0 18px; }
+  .pair-hint { color: var(--ink-dim); font-size: 13px; margin-top: 18px;
+               padding: 10px 14px; background: rgba(56,189,248,.06);
+               border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; }
   .radar-wrap { display: grid; grid-template-columns: 1.1fr .9fr; gap: 24px; align-items: center; }
   @media (max-width: 760px) { .radar-wrap { grid-template-columns: 1fr; } }
   .radar { width: 100%; height: auto; }
@@ -713,24 +689,10 @@ _BASE_CSS = """
   .leg { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-dim); }
   .leg i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
   .leg b { margin-left: auto; color: var(--ink); font-family: 'JetBrains Mono'; }
-  .scale { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 22px; }
-  .lv { flex: 1; min-width: 110px; background: var(--panel-2); border: 1px solid var(--line);
-        border-radius: 10px; padding: 10px 12px; }
-  .lv b { display: block; font-family: 'JetBrains Mono'; color: var(--accent); font-size: 13px; }
-  .lv span { display: block; font-size: 12px; color: var(--ink-dim); }
-  .lv i { font-style: normal; font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono'; }
-  .rank-table { width: 100%; border-collapse: collapse; }
-  .rank-table th { text-align: left; font-size: 12px; color: var(--ink-dim); font-weight: 500;
-                   padding: 8px 10px; border-bottom: 1px solid var(--line); }
-  .rank-table td { padding: 12px 10px; border-bottom: 1px solid var(--line); font-size: 14px; }
-  .rank-table .rank { font-family: 'JetBrains Mono'; color: var(--ink-dim); width: 36px; }
-  .lvl { font-size: 12px; color: var(--ink-dim); }
   .pill { font-family: 'JetBrains Mono'; font-weight: 700; padding: 3px 10px; border-radius: 999px; font-size: 13px; }
   .pill.good { background: rgba(74,222,128,.15); color: var(--good); }
   .pill.mid { background: rgba(251,191,36,.15); color: var(--mid); }
   .pill.low { background: rgba(248,113,113,.15); color: var(--low); }
-  .team-avg { margin-top: 16px; color: var(--ink-dim); font-size: 14px; }
-  .team-avg b { color: var(--ink); font-family: 'JetBrains Mono'; font-size: 18px; }
   .target-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
                  margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
   .target-head h3 { font-size: 20px; }
@@ -740,7 +702,6 @@ _BASE_CSS = """
   .big-score.good .num { color: var(--good); }
   .big-score.mid .num { color: var(--mid); }
   .big-score.low .num { color: var(--low); }
-  .lvl-tag { font-size: 11px; color: var(--ink-dim); font-family: 'JetBrains Mono'; }
   .dim-block { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
   .dim-block summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between;
                        align-items: center; padding: 14px 18px; background: var(--panel-2); }
@@ -772,8 +733,6 @@ _BASE_CSS = """
 
 _MERGED_EXTRA_CSS = """
   .usage-series { stroke-linejoin: round; stroke-linecap: round; }
-  .na-tag { fill: var(--ink-dim); font-family: 'JetBrains Mono'; font-size: 11px;
-            letter-spacing: .08em; }
   .legend .leg .sub { font-size: 11px; color: var(--ink-dim); margin-left: 8px; }
   .gap-table { width: 100%; border-collapse: collapse; margin-top: 18px; }
   .gap-table th { text-align: left; font-size: 12px; color: var(--ink-dim);
@@ -789,16 +748,35 @@ _MERGED_EXTRA_CSS = """
   .col-head { font-family: 'JetBrains Mono'; font-size: 11px; color: var(--accent);
               letter-spacing: .15em; text-transform: uppercase; padding: 8px 0;
               border-bottom: 1px solid var(--line); margin-bottom: 6px; }
-  .gap-list { list-style: none; padding: 0; margin: 8px 0 0; }
-  .gap-item { display: flex; gap: 16px; padding: 14px 0;
-              border-bottom: 1px dashed var(--line); }
-  .gap-item:last-child { border-bottom: none; }
+  .gap-list { padding: 0; margin: 8px 0 0; }
+  .gap-item { border: 1px solid var(--line); border-radius: 12px;
+              margin-bottom: 10px; overflow: hidden; background: var(--panel-2); }
+  .gap-item summary { list-style: none; cursor: pointer; display: flex;
+                      gap: 16px; padding: 14px 18px; align-items: flex-start; }
+  .gap-item summary::-webkit-details-marker { display: none; }
+  .gap-item summary:hover { background: #141b25; }
+  .gap-item[open] summary { border-bottom: 1px solid var(--line); }
+  .gap-item[open] .gap-expand-icon { transform: rotate(180deg); }
   .gap-rank { font-family: 'JetBrains Mono'; font-weight: 800; font-size: 22px;
-              color: var(--accent); min-width: 28px; }
+              color: var(--accent); min-width: 28px; line-height: 1.4; }
+  .gap-summary-body { flex: 1; min-width: 0; }
+  .gap-headline { display: flex; gap: 10px; align-items: center; margin-bottom: 4px;
+                  flex-wrap: wrap; }
+  .gap-tag { font-family: 'JetBrains Mono'; font-size: 10px; font-weight: 700;
+             padding: 2px 8px; border-radius: 999px; letter-spacing: .1em; }
+  .gap-tag-under { background: rgba(248,113,113,.18); color: var(--low); }
+  .gap-tag-over  { background: rgba(74,222,128,.18); color: var(--good); }
+  .gap-axis-name { font-family: 'JetBrains Mono'; font-size: 12px;
+                   color: var(--ink-dim); }
+  .gap-target { color: var(--ink); font-weight: 500; font-size: 13px;
+                margin-left: auto; }
   .gap-hint { font-size: 14.5px; line-height: 1.55; }
   .gap-meta { margin-top: 6px; color: var(--ink-dim); font-size: 12px;
-              display: flex; gap: 6px; flex-wrap: wrap; }
+              display: flex; gap: 12px; flex-wrap: wrap; }
   .gap-meta b { color: var(--ink); font-family: 'JetBrains Mono'; }
+  .gap-expand-icon { color: var(--ink-dim); font-size: 16px; margin-left: 8px;
+                     transition: transform .15s ease; line-height: 1.4; }
+  .gap-item .dual-findings { padding: 14px 18px 16px; }
   .dual-legend { display: flex; gap: 22px; flex-wrap: wrap; align-items: center;
                  padding: 12px 14px; background: var(--panel-2);
                  border: 1px solid var(--line); border-radius: 10px;
@@ -811,7 +789,6 @@ _MERGED_EXTRA_CSS = """
 
 
 def _scaffold_html(lang: str, title: str, body: str, extra_css: str = "") -> str:
-    """Common <html>…</html> wrapper used by both scan and merged reports."""
     return f"""<!DOCTYPE html>
 <html lang="{_t(lang,"html_lang")}">
 <head>
@@ -825,92 +802,11 @@ def _scaffold_html(lang: str, title: str, body: str, extra_css: str = "") -> str
 </html>"""
 
 
-def build_merged_html(merged, lang="en"):
-    """Render the dual-track (config vs usage) report."""
-    dim_keys = _normalise_dimensions(merged["dimensions"])
-    dim_labels = i18n_mod.dimensions_for(dim_keys, lang)
-    targets = merged["targets"]
-
-    if not targets:
-        return f"<html><body>{_t(lang,'no_targets')}</body></html>"
-
-    radar = dual_radar_svg(targets, dim_keys, dim_labels)
-
-    def _legend_item(i: int, t: dict) -> str:
-        usage_overall = t.get("usage_overall")
-        usage_str = f"{usage_overall:.0f}" if usage_overall is not None else "N/A"
-        return (
-            f'<span class="leg"><i style="background:{PALETTE[i%len(PALETTE)]}"></i>'
-            f'{t["name"]} '
-            f'<b>{(t["config_overall"] or 0):.0f}</b>'
-            f'<span class="sub">→ {usage_str}</span>'
-            f'</span>'
-        )
-
-    legend = "".join(_legend_item(i, t) for i, t in enumerate(targets))
-
-    dual_legend = (
-        '<div class="dual-legend">'
-        f'<span class="swatch"><span class="sw-line"></span>{_t(lang,"dual_legend_cfg")}</span>'
-        f'<span class="swatch"><span class="sw-line dashed"></span>{_t(lang,"dual_legend_use")}</span>'
-        f'<span class="swatch">{_t(lang,"dual_legend_na")}</span>'
-        '</div>')
-
-    target_sections = "".join(f"""
-      <section class="card target">
-        <div class="target-head">
-          <div>
-            <h3>{t['name']}</h3>
-            <code class="path">{t['path']}</code>
-          </div>
-          <div class="big-score {('good' if (t['config_overall'] or 0)>=60 else 'mid' if (t['config_overall'] or 0)>=30 else 'low')}">
-            <span class="num">{(t['config_overall'] or 0):.0f}</span>
-            <span class="lvl-tag">{_level_label(t.get('level_threshold', 0), lang)}</span>
-          </div>
-        </div>
-        {gap_table_html(t, dim_labels, lang=lang)}
-        <div style="margin-top: 18px;">{merged_findings_html(t, dim_labels, lang=lang)}</div>
-        {"".join(f'<p class="blind"><span>{_t(lang,"blind_label")}</span>{_blind_text(b, lang)}</p>' for b in t.get('blind_spots', []))}
-        {"".join(f'<p class="blind"><span>{_t(lang,"note_label")}</span>{n}</p>' for n in t.get('notes', []))}
-      </section>""" for t in targets)
-
-    level_thresholds = merged.get("level_thresholds")
-    if level_thresholds is None:
-        level_thresholds = [th for th, _ in i18n_mod.LEVELS]
-    level_scale = "".join(
-        _level_scale_item(th, lang) for th in level_thresholds)
-
-    body = f"""
-  <div class="wrap">
-    <header class="masthead">
-      <div class="kicker">{_t(lang,"kicker_merged")}</div>
-      <h1>{_t(lang,"h1_merged_pre")}<span class="em">{_t(lang,"h1_merged_em")}</span>{_t(lang,"h1_merged_post")}</h1>
-      <p class="sub">{_t(lang,"sub_merged")}</p>
-    </header>
-
-    <section class="card">
-      <h2>{_t(lang,"h2_dual")}</h2>
-      <div class="radar-wrap">
-        {radar}
-        <div class="legend">{legend}</div>
-      </div>
-      {dual_legend}
-      <div class="scale">{level_scale}</div>
-    </section>
-
-    {top_gaps_html(targets, lang=lang)}
-
-    {target_sections}
-
-    <footer>{_t(lang,"footer_merged")}</footer>
-  </div>"""
-
-    return _scaffold_html(lang=lang, title=_t(lang, "title_merged"),
-                          body=body, extra_css=_MERGED_EXTRA_CSS)
-
+# ----------------------------------------------------------------------------
+# CLI
+# ----------------------------------------------------------------------------
 
 def _prompt_lang():
-    """互動式選單;非 TTY 環境直接回 'en'。"""
     import sys
     if not sys.stdin.isatty():
         return "en"
@@ -925,15 +821,18 @@ def _prompt_lang():
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="agent-radar HTML report renderer (0.2.0)")
     ap.add_argument("input", nargs="?", default=None,
-                    help="agent-radar scan 產出的 JSON (scan-only 模式)")
+                    help="scan.json from `agent-radar scan` (configured-coverage mode)")
     ap.add_argument("--session", default=None,
-                    help="agent-radar session 產出的 JSON (可選,加上後報告會多一張運用度雷達)")
+                    help="session.json from `agent-radar session` "
+                         "— merges inline with scan to produce the activation-gap view")
     ap.add_argument("--merged", default=None,
-                    help="agent-radar merge 產出的 JSON (雙軌雷達模式)")
+                    help="merged.json from `agent-radar merge` "
+                         "— activation-gap view direct")
     ap.add_argument("--lang", choices=["en", "zh"], default=None,
-                    help="報告語言 (en|zh)。未指定時若為 TTY 會彈出選單,否則預設 en")
+                    help="Report language (en|zh). Prompts at TTY if omitted; en otherwise.")
     ap.add_argument("-o", "--output", default="report.html")
     args = ap.parse_args()
 
@@ -944,12 +843,15 @@ def main():
         html = build_merged_html(merged, lang=lang)
     else:
         if not args.input:
-            ap.error("input 為必要參數 (或改用 --merged)")
-        data = json.loads(Path(args.input).read_text(encoding="utf-8"))
-        session_data = None
+            ap.error("input scan.json is required (or use --merged)")
+        scan_data = json.loads(Path(args.input).read_text(encoding="utf-8"))
         if args.session:
             session_data = json.loads(Path(args.session).read_text(encoding="utf-8"))
-        html = build_html(data, session_data=session_data, lang=lang)
+            merged = _inline_merge(scan_data, session_data)
+            html = build_merged_html(merged, lang=lang)
+        else:
+            html = build_html(scan_data, lang=lang)
+
     Path(args.output).write_text(html, encoding="utf-8")
     print(f"[ok] report generated ({lang}): {args.output}")
 

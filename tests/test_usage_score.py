@@ -59,16 +59,17 @@ class TestUsageDimensionsKeys:
 
 
 class TestScoreWindowEmpty:
-    def test_iteration_is_none_and_other_dims_numeric(self):
+    def test_five_axes_all_numeric(self):
+        # 0.2.0 dropped "iteration" — all five axes return numeric scores.
         result = score_window(_empty_window())
-        assert result["scores"]["iteration"] is None
+        assert "iteration" not in result["scores"]
         # claude_md scoring uses 1 - reject_ratio which is 1.0 with no events;
         # the remaining dims must be 0 when nothing happened.
         for dim in ("skills", "mcp", "automation", "context_hygiene"):
             assert result["scores"][dim] == 0
         # claude_md falls back to 100 when no decisions exist (degenerate)
         assert result["scores"]["claude_md"] == 100.0
-        # overall = mean of numeric dims (iteration excluded)
+        # overall = mean of the five numeric dims
         assert result["overall"] == round(100 / 5, 1)
 
     def test_findings_returned_per_dim(self):

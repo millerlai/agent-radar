@@ -16,9 +16,10 @@ from __future__ import annotations
 from .collectors.base import UsageWindow
 
 
-# Keep in sync with scanner.DIMENSION_KEYS.
+# Keep in sync with scanner.DIMENSION_KEYS — 0.2.0 dropped "iteration" as a
+# top-level axis (folded into claude_md as a fact-based sub-signal).
 USAGE_DIMENSION_KEYS = [
-    "claude_md", "skills", "mcp", "automation", "context_hygiene", "iteration",
+    "claude_md", "skills", "mcp", "automation", "context_hygiene",
 ]
 
 
@@ -237,7 +238,6 @@ def score_window(window: UsageWindow, scan_context: dict | None = None) -> dict:
         "mcp": mcp_score,
         "automation": auto_score,
         "context_hygiene": ctx_score,
-        "iteration": None,
     }
     findings_by_dim = {
         "claude_md": md_f,
@@ -245,7 +245,6 @@ def score_window(window: UsageWindow, scan_context: dict | None = None) -> dict:
         "mcp": mcp_f,
         "automation": auto_f,
         "context_hygiene": ctx_f,
-        "iteration": [],
     }
     totals = {
         "session_count": window.session_count,

@@ -1,57 +1,48 @@
-# agent-radar · AI Agent 能力邊界診斷工具
+# agent-radar · Claude Code Activation Gap 診斷工具
 
-偵測「個人 / 團隊使用 Claude Code 生態的能力邊界」——透過掃描檔案系統指紋,
-把一個人對 CLAUDE.md、skills、MCP、hooks、subagents 等的掌握程度量化成
-六大維度的成熟度分數,並輸出 HTML 雷達圖報告。
+**這個工具獨家做到的一件事**:它同時看得到你**配置了什麼**(磁碟上的指紋)
+和**實際在 session 裡發生了什麼**(JSONL 紀錄)—— 兩者落差就是改善空間。
 
-**雙層量測**:
+- `agent-radar scan` 讀檔案系統指紋 → **配置側**(五大軸)
+- `agent-radar session` 讀本機 `~/.claude/projects/*.jsonl` → **啟動側**(同五軸)
+- `agent-radar merge` + `agent-radar report` → HTML 視覺化 activation gap
 
-- `agent-radar scan` 量「配置完整度」(靜態指紋,六大配置維度)
-- `agent-radar session` 讀本機 `~/.claude/projects/*.jsonl`,量「實際運用度」
-  (session 內真正觸發的工具 / Skill / MCP / 使用者糾正率)
-
-兩者落差即是最具體的改善清單。本專案本身也是一個可安裝的 Claude Code skill
-(見 `SKILL.md`),可放到 `~/.claude/skills/agent-radar/` 後直接用。
+附帶的 `/agent-radar-coach` skill(用 `agent-radar install-skill` 安裝)會
+拿著這個落差,一次處理一個 gap,**用實際數據當證據、改之前先問你**。
 
 ## 核心理念
 
-一個人對 Claude Code 的掌握程度,會直接刻在他的檔案系統與 session 紀錄裡。
-本工具讀這些指紋,而不是去監控對話內容。
+絕大多數「Claude Code 健檢」工具止步於「你寫了 CLAUDE.md 嗎?」這只是指紋偵測—
+必要但不有趣。**真正有趣的是:很多人寫了完整 CLAUDE.md、裝了 5 個 MCP,
+但實際 session 中根本沒被用到。**這個落差,本工具會用兩條雷達線疊起來直接視覺化。
 
-- **配置完整度** (靜態) 反映你「寫了多少」CLAUDE.md / skills / MCP。
-- **實際運用度** (動態) 反映這些設定在 session 中「真的有沒有被觸發」。
+agent-radar **不會**去評你 CLAUDE.md 的「品質」——「imperative 詞出現幾次」
+這類 heuristic 根本量不到品質,只是假裝在量。品質判斷是解釋層的事,
+交給 coach skill,讓 Claude 真的讀內容做語意級判斷。
 
-很多人寫了完整 CLAUDE.md、裝了 5 個 MCP,但實際 session 中根本沒被用到——
-這個落差,本工具會用兩條雷達線疊起來直接視覺化。
+## 五大軸
 
-## 六大配置維度 (agent-radar scan)
+每個軸都產出兩個 0-100 分數:**Configured**(配置側,scan)與
+**Activated**(啟動側,session)。落差就是改善空間。
 
-| 維度 | 偵測什麼 |
-|---|---|
-| CLAUDE.md 成熟度 | 有無、user/project 層級、結構化分區、指令式語氣、精簡度、@import 拆檔、**Lint 大小** |
-| Skills 運用 | skills 有無、SKILL.md 的 description 觸發品質、progressive disclosure、**Lint frontmatter & token 衛生** |
-| MCP 整合 | MCP server 數量與類型廣度 (data/saas/cloud/search/files) |
-| 自動化 | hooks、subagents、自訂 slash commands、plugins |
-| 情境衛生 | user/project 設定分工、共享 vs 個人設定區分 (gitignore)、模組化引用 |
-| 迭代與維護 | 透過 git history 看設定是否隨踩坑反覆調整 |
+| 軸 | Configured (`scan`) | Activated (`session`) |
+|---|---|---|
+| `claude_md` | 存在、size、`@import` 引用、**迭代證據**(git commit 次數 + 內容中的「lessons learned / 不要再 / 日期戳記」等迭代訊號) | `(1 - 糾正率) × 100` —— 糾正率低 = CLAUDE.md 真的在指導 |
+| `skills` | SKILL.md 數量 + lint 衛生(frontmatter 合規、無 ASCII-art 裝飾、行數合規) | `Skill` tool 觸發次數 × 10 |
+| `mcp` | 配置的 server 數量 + 類別廣度(data / saas / cloud / search / files) | `mcp__*` tool 呼叫次數 × 8 |
+| `automation` | Hooks、subagents、自訂 commands、plugins(事實計數) | `Agent` tool 派遣次數 × 10(hooks/commands 在 JSONL 看不到) |
+| `context_hygiene` | User/project 分工 + `settings.local.json` gitignore + `@import` 模組化 | 混合: `(1 - 重複讀率) × 50` + `@ 引用率 × 50` |
 
 **Lint 訊號**借自 [`felixgeelhaar/cclint`](https://github.com/felixgeelhaar/cclint)
-與 agentskills.io 的 Skill Linter 規則 (frontmatter 必要欄位、行數上限、
-ASCII art / 裝飾性內容偵測、CLAUDE.md 過大警告等),用純 Python 重新實作,
+與 agentskills.io 的 Skill Linter 規則(frontmatter 必要欄位、行數上限、
+ASCII art 偵測、CLAUDE.md 過大警告等),用純 Python 重新實作,
 不依賴外部工具。
 
-總分對應 L0(未使用) → L4(精煉) 五個層級。
-
-## 六大運用維度 (agent-radar session)
-
-| 維度 | 量測什麼 |
-|---|---|
-| tool_diversity | session 內呼叫過幾種不同工具 |
-| skill_triggered | `Skill` tool 實際被呼叫次數 (反映 description 觸發力) |
-| mcp_triggered | `mcp__*` tool 實際呼叫次數 (反映 MCP 是否真的被用) |
-| low_correction | user 訊息中糾正性語句的比例 (反向計分,低=好) |
-| context_efficiency | 同一 session 重複讀同檔案的比例 (反向計分) |
-| session_volume | session 數量與訊息量 (基準曝光度) |
+> **從 0.1.x 升級?** `iteration` 維度沒了 —— 折進 `claude_md` 變成 fact-based
+> 子訊號(git commit 次數 + 內容 regex)。「成熟度總分」也沒了;同一個 0-100
+> 數字還在,但語意改為「Configured Coverage」不是「Maturity」。
+> Heuristic 子檢查(imperative 詞統計、headers-graded、word-count concise bucket、
+> skills description 品質分)都拿掉 —— 這些是假裝在量品質,CLI 本來就量不到。
 
 ## 安裝
 
