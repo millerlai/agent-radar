@@ -96,6 +96,18 @@ agent-radar --help
 舊,跑 `pipx upgrade claude-agent-radar` 或 `uv tool upgrade claude-agent-radar`
 升級。
 
+### 安裝 coach skill (選用,但建議裝)
+
+```bash
+agent-radar install-skill
+```
+
+把內建的 Claude Code skill 複製到 `~/.claude/skills/agent-radar-coach/`。
+在任何 Claude Code session 內叫 `/agent-radar-coach`,
+它會根據你的 scan / session 結果,一次處理一個 gap
+(用實際數據當證據、改之前先問你)。覆蓋舊版加 `--force`,
+裝到別處用 `--dest <dir>`。
+
 如果 `pipx` / `uv tool install` 成功但 `agent-radar` 還是
 `command not found`,代表 shell 還沒讀到 tool-bin 目錄 ——
 跑 `pipx ensurepath` 或 `uv tool update-shell`,再重開 shell 即可。
