@@ -11,6 +11,17 @@
 The companion `/agent-radar-coach` skill (install via `agent-radar install-skill`)
 walks you through closing the biggest gaps one at a time, evidence-driven, ask-before-edit.
 
+## See a sample report
+
+Sample reports rendered from a real repo are checked into this repo —
+GitHub doesn't preview HTML inline, so view them through a CDN:
+
+- 🇬🇧 **English** · [report.en.html](https://raw.githack.com/millerlai/agent-radar/main/report.en.html)
+- 🇹🇼 **繁體中文** · [report.zh.html](https://raw.githack.com/millerlai/agent-radar/main/report.zh.html)
+
+Each shows the dual-track radar, the bidirectional Top Gaps (click each row
+to expand the underlying configured + activated findings), and per-target detail.
+
 ## Core Idea
 
 Most "Claude Code health" tools stop at "did you write a CLAUDE.md?" That's

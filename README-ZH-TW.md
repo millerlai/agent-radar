@@ -10,6 +10,17 @@
 附帶的 `/agent-radar-coach` skill(用 `agent-radar install-skill` 安裝)會
 拿著這個落差,一次處理一個 gap,**用實際數據當證據、改之前先問你**。
 
+## 範例報告
+
+repo 內已附上一份對真實 repo 跑出來的範例報告 ——
+GitHub 不會直接渲染 HTML,透過 CDN 預覽:
+
+- 🇹🇼 **繁體中文** · [report.zh.html](https://raw.githack.com/millerlai/agent-radar/main/report.zh.html)
+- 🇬🇧 **English** · [report.en.html](https://raw.githack.com/millerlai/agent-radar/main/report.en.html)
+
+裡面包含雙軌雷達、雙向 Top Gaps(每一條都可以點開看背後的 configured +
+activated findings)、以及 per-target 細節。
+
 ## 核心理念
 
 絕大多數「Claude Code 健檢」工具止步於「你寫了 CLAUDE.md 嗎?」這只是指紋偵測—
