@@ -168,7 +168,7 @@ Scan the current repo + your user-space, generate the full HTML report
 including the actual-usage radar. Run from the repo you want to scan:
 
 ```bash
-agent-radar scan --include-home . -o scan.json
+agent-radar scan --include-home . -o scan.json    # in the current repo
 agent-radar session -o session.json
 agent-radar report scan.json --session session.json -o report.html
 
@@ -176,6 +176,15 @@ agent-radar report scan.json --session session.json -o report.html
 open report.html        # macOS
 xdg-open report.html    # Linux
 start report.html       # Windows (PowerShell / cmd)
+```
+
+**Multi-repo variant** — pass any number of paths to `scan`; the report
+auto-generates a per-target comparison so you can benchmark a whole team:
+
+```bash
+agent-radar scan --include-home /repos/a /repos/b /repos/c -o scan.json
+agent-radar session -o session.json
+agent-radar report scan.json --session session.json -o report.html
 ```
 
 If `agent-radar` is not found, swap every `agent-radar` for
