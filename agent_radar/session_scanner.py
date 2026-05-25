@@ -15,14 +15,15 @@ session 紀錄 (~/.claude/projects/*/*.jsonl),量化使用者真實用了 Claude
 本工具讀取 JSONL 把這些「真正發生的事」量化成六大運用維度分數,
 與 ``agent_radar.scanner`` 配置分數疊起來,落差即為改善空間。
 
-六大運用維度
+七大運用維度
 -----------
-  1. tool_diversity   - 工具呼叫多樣性 (用了幾種工具?)
-  2. skill_triggered  - Skills 是否真的觸發 (Skill tool call 次數)
-  3. mcp_triggered    - MCP server 是否真的被呼叫 (mcp__ prefix tool)
-  4. low_correction   - 使用者糾正頻率低 = CLAUDE.md 指導力佳 (反向計分)
-  5. context_efficiency - 重複讀同檔比例低 = context 利用率高
-  6. session_volume   - Session 量 (基準曝光度,過低時其他分數參考價值低)
+  1. tool_diversity      - 工具呼叫多樣性 (用了幾種工具?)
+  2. skill_triggered     - Skills 是否真的觸發 (Skill tool call 次數)
+  3. mcp_triggered       - MCP server 是否真的被呼叫 (mcp__ prefix tool)
+  4. subagent_triggered  - Subagent 是否真的被派遣 (Agent tool call 次數)
+  5. low_correction      - 使用者糾正頻率低 = CLAUDE.md 指導力佳 (反向計分)
+  6. context_efficiency  - 重複讀同檔比例低 = context 利用率高
+  7. session_volume      - Session 量 (基準曝光度,過低時其他分數參考價值低)
 
 JSON shape
 ----------
@@ -40,7 +41,7 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 USAGE_DIMENSION_KEYS = [
-    "tool_diversity", "skill_triggered", "mcp_triggered",
+    "tool_diversity", "skill_triggered", "mcp_triggered", "subagent_triggered",
     "low_correction", "context_efficiency", "session_volume",
 ]
 
@@ -65,6 +66,7 @@ class UsageReport:
     unique_tools: list = field(default_factory=list)
     skill_calls: int = 0
     mcp_calls: int = 0
+    subagent_calls: int = 0
     user_messages: int = 0
     corrections: int = 0
     reads_total: int = 0
@@ -154,6 +156,12 @@ def analyze_project(proj_dir: Path) -> UsageReport:
                         rep.skill_calls += 1
                     if name_.startswith("mcp__"):
                         rep.mcp_calls += 1
+                    # Subagent dispatch tool in current Claude Code JSONL is
+                    # ``Agent``. (Older OTel collectors saw ``Task`` with a
+                    # ``subagent_type`` param; JSONL exposes the tool name
+                    # directly, so we just match by name.)
+                    if name_ == "Agent":
+                        rep.subagent_calls += 1
                     if name_ == "Read":
                         inp = tu.get("input") or {}
                         fp = inp.get("file_path")
@@ -204,7 +212,21 @@ def analyze_project(proj_dir: Path) -> UsageReport:
         "detail_args": ({"n": rep.mcp_calls} if rep.mcp_calls else {}),
     })
 
-    # 4. low_correction (反向)
+    # 4. subagent_triggered
+    # Same shape as skill/mcp: each dispatch is rare-but-valuable, so 10 pts
+    # per call (≥10 calls saturates). Discourages over-fitting to one prolific
+    # session while still rewarding any real adoption.
+    score = _clamp(rep.subagent_calls * 10, 0, 100)
+    findings.append({
+        "dimension": "subagent_triggered",
+        "label_key": "session.subagent_calls",
+        "weight": 100, "score": round(score, 1),
+        "detail_key": ("session.subagent_calls.have" if rep.subagent_calls
+                       else "session.subagent_calls.none"),
+        "detail_args": ({"n": rep.subagent_calls} if rep.subagent_calls else {}),
+    })
+
+    # 5. low_correction (反向)
     if rep.user_messages == 0:
         score = 0
         detail_key = "session.low_correction.empty"
@@ -223,7 +245,7 @@ def analyze_project(proj_dir: Path) -> UsageReport:
         "detail_args": detail_args,
     })
 
-    # 5. context_efficiency
+    # 6. context_efficiency
     if rep.reads_total == 0:
         score = 50
         detail_key = "session.read_repeat.empty"
@@ -242,7 +264,7 @@ def analyze_project(proj_dir: Path) -> UsageReport:
         "detail_args": detail_args,
     })
 
-    # 6. session_volume
+    # 7. session_volume
     if rep.sessions == 0:
         score = 0
     elif rep.sessions < 3:

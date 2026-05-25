@@ -163,6 +163,8 @@ class TestAnalyzeProject:
             _assistant_with_tool("Read", file_path="/repo/b.py"),
             _assistant_with_tool("Skill", skill="browse"),
             _assistant_with_tool("mcp__github__list_issues"),
+            _assistant_with_tool("Agent", subagent_type="Explore",
+                                 description="find usages"),
             _assistant_with_tool("Bash"),
             _user_msg("no, that's wrong"),
             _user_msg("thanks"),
@@ -173,6 +175,7 @@ class TestAnalyzeProject:
         assert rep.sessions == 1
         assert rep.skill_calls == 1
         assert rep.mcp_calls == 1
+        assert rep.subagent_calls == 1
         # a.py read twice → 1 repeat
         assert rep.reads_total == 3
         assert rep.reads_repeat == 1
@@ -190,6 +193,8 @@ class TestAnalyzeProject:
         assert rep.scores["skill_triggered"] > 0
         # mcp_triggered > 0
         assert rep.scores["mcp_triggered"] > 0
+        # subagent_triggered > 0 because Agent tool fired
+        assert rep.scores["subagent_triggered"] > 0
 
     def test_session_volume_buckets(self, tmp_path):
         """Cover the 3 bucket boundaries used by session_volume scoring."""
@@ -231,6 +236,26 @@ class TestAnalyzeProject:
         rep = analyze_project(proj)
         # no Read calls → neutral 50
         assert rep.scores["context_efficiency"] == 50
+
+    def test_subagent_triggered_zero_without_agent_tool(self, tmp_path):
+        proj = tmp_path / "C--no-subagent"
+        proj.mkdir()
+        # Bash + Read but no Agent → subagent_calls 0, score 0, .none detail
+        entries = [
+            _user_msg("just bash"),
+            _assistant_with_tool("Bash"),
+            _assistant_with_tool("Read", file_path="/x.py"),
+        ]
+        _write_jsonl(proj / "a.jsonl", entries)
+        rep = analyze_project(proj)
+        assert rep.subagent_calls == 0
+        assert rep.scores["subagent_triggered"] == 0
+        sub_finding = next(f for f in rep.findings
+                           if f["dimension"] == "subagent_triggered")
+        assert sub_finding["detail_key"].endswith(".none")
+
+    def test_usage_dimension_keys_contain_subagent(self):
+        assert "subagent_triggered" in session_scanner.USAGE_DIMENSION_KEYS
 
 
 # ---------------------------------------------------------------------------
