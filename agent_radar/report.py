@@ -27,6 +27,7 @@ measure.
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 from . import i18n as i18n_mod
@@ -154,6 +155,21 @@ STRINGS = {
 
 def _t(lang, key):
     return STRINGS.get(lang, STRINGS["en"]).get(key, STRINGS["en"].get(key, key))
+
+
+def _looks_like_merged(data: dict) -> bool:
+    """True iff ``data`` carries merge.py's score shape (dicts, not numbers).
+
+    The cheapest reliable signal: in scan.json the first target's first
+    score value is a number; in merged.json it's a ``{"config","usage","gap"}``
+    dict. Empty / malformed inputs return False — let downstream handle them.
+    """
+    targets = data.get("targets") if isinstance(data, dict) else None
+    if not targets:
+        return False
+    first_scores = (targets[0] or {}).get("scores") or {}
+    sample = next(iter(first_scores.values()), None)
+    return isinstance(sample, dict)
 
 
 # ----------------------------------------------------------------------------
@@ -845,6 +861,19 @@ def main():
         if not args.input:
             ap.error("input scan.json is required (or use --merged)")
         scan_data = json.loads(Path(args.input).read_text(encoding="utf-8"))
+        # File names don't disambiguate scan.json vs merged.json, but the
+        # shapes do: scan.json has flat numeric scores, merged.json has
+        # {"config","usage","gap"} dicts. Catch the mismatch up front so
+        # users get an actionable message instead of a TypeError from
+        # deep inside radar_svg.
+        if _looks_like_merged(scan_data):
+            sys.stderr.write(
+                f"error: {args.input} looks like a merged.json (each axis "
+                "score is a dict, not a number). Pass it via --merged:\n"
+                f"  agent-radar report --merged {args.input} "
+                f"-o {args.output}\n"
+            )
+            return 2
         if args.session:
             session_data = json.loads(Path(args.session).read_text(encoding="utf-8"))
             merged = _inline_merge(scan_data, session_data)
