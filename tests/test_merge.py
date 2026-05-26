@@ -7,7 +7,6 @@ import json
 
 from agent_radar.usage import merge as merge_mod
 from agent_radar.usage.merge import (
-    GAP_ABS_FLOOR,
     GAP_RATIO_FLOOR,
     _gap_hint,
     _rank_gaps,
