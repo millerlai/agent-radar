@@ -19,10 +19,13 @@ The product thesis is: **agent-radar uniquely sees both what you configured AND 
    ```
    If `merged.json` exists, read it directly — don't re-run.
 
-2. **Pick targets.** In `merged.json`, sort `targets[*].scores` by `gap` (descending). The **top 3 axes with gap > 15** are your candidates. Ignore axes where:
-   - Gap < 15 (noise floor — already aligned)
-   - `usage` is `null` (no session data — flag it but don't coach)
-   - `sessions < 3` in the source `session.json` (too thin to judge — tell the user to come back)
+2. **Pick targets.** Read `targets[*].top_gaps` from `merged.json` directly — `merge` already applied the noise floor (`|gap| > 10` *and* `gap_ratio > 0.3`, where `gap_ratio = |gap| / max(config, usage, 1)`). Take the first 3 rows. Each row carries `direction`:
+   - `direction = "under"` → configured > activated → the canonical underused axis (most common case).
+   - `direction = "over"` → activated > configured → user is doing something heavily that isn't represented in config (often a sign that a repeated manual pattern could be sunk into a command/subagent).
+   Skip axes where:
+   - Not in `top_gaps` (filtered by the relative threshold — already aligned).
+   - `usage` is `null` (no session data — flag it but don't coach).
+   - `sessions < 3` in the source `session.json` (too thin to judge — tell the user to come back).
 
 3. **Coach one gap at a time.** For each chosen axis:
    - State **the specific number**: "Configured X, Activated Y, Gap = X−Y".
@@ -62,6 +65,8 @@ For each axis, the goal is to move the **activated** number up (rarely: lower th
 
 If `scan.claude_md.iteration.detail` shows `commits: 0, hits: 0`, also flag: **no iteration evidence at all** — this CLAUDE.md was written once and never refined. Coach them to add a "Lessons learned" or "Mistakes to avoid" section seeded from the corrections you just found.
 
+**If `direction = over`** (configured side thin, but correction rate already low): the user is keeping Claude on track via in-session prompting instead of CLAUDE.md. Pull 5–10 substantive user messages from recent JSONL that read like guidance ("always use X", "don't do Y", "we use snake_case here"). Propose folding the recurring ones into CLAUDE.md so they stop having to be re-typed every session.
+
 ### 2. `skills`
 
 | | Source |
@@ -79,6 +84,8 @@ If `scan.claude_md.iteration.detail` shows `commits: 0, hits: 0`, also flag: **n
 3. Pick the weakest one. Rewrite its description with explicit trigger phrases borrowed from real user-message patterns in the JSONL.
 4. Apply, suggest the user start one test session that should trigger it, re-measure.
 
+**If `direction = over`** (few skills installed but Skill tool fires often): the existing skills are pulling weight. Two productive moves: (a) audit lint debt on the active skill — `scan.skills.lint_*` findings — and clean them; (b) look at the user-message patterns that trigger the working skill, and propose authoring 1 more skill in an adjacent category that those patterns hint at.
+
 ### 3. `mcp`
 
 | | Source |
@@ -95,6 +102,8 @@ If `scan.claude_md.iteration.detail` shows `commits: 0, hits: 0`, also flag: **n
    - **Remove**: if the server isn't useful to the user's actual workflow, suggest pruning it from config (reduces noise, frees connection limits).
    - **Activate**: if it should be useful, the user usually doesn't know it can be called. Add a 1-line CLAUDE.md hint like "Use mcp__linear__list_issues to check ticket status".
 
+**If `direction = over`** (few servers configured but `mcp__*` calls heavy): the user has 1–2 high-value MCP integrations already firing. Usually fine — affirm. If they want more leverage, look at the tool prefixes in JSONL (`mcp__<server>__<tool>`) and suggest exploring one more server in the same category (e.g. they're using `mcp__linear` heavily → suggest `mcp__github` or `mcp__sentry` if the rest of their stack hints at it).
+
 ### 4. `automation`
 
 | | Source |
@@ -110,6 +119,11 @@ If `scan.claude_md.iteration.detail` shows `commits: 0, hits: 0`, also flag: **n
 3. Rewrite the weakest subagent description with concrete trigger conditions: "Use this subagent when [specific situation], NOT for [common confusion]".
 4. Note that hook firings and command invocations don't appear in JSONL — for those, recommend the user wire up OTel later if they want telemetry.
 
+**If `direction = over`** (heavy `Agent` tool dispatch but few subagents/commands defined): this is the most actionable over-direction signal. The user is **manually re-describing the same task to Claude over and over** instead of capturing it as config. Fix flow:
+1. From recent JSONL, find the top 3 most-repeated `Agent` tool invocations — group by first ~80 chars of the subagent prompt.
+2. For the most frequent one, propose extracting it into `.claude/commands/<verb>.md` (custom slash command) so the user types `/<verb>` instead of re-explaining the task each time.
+3. If the pattern is more about *delegated reasoning* than a recipe, propose `.claude/agents/<name>.md` (subagent) instead, with a description that names the trigger phrases pulled from the repeated prompts.
+
 ### 5. `context_hygiene`
 
 | | Source |
@@ -124,6 +138,8 @@ If `scan.claude_md.iteration.detail` shows `commits: 0, hits: 0`, also flag: **n
 2. The two interventions:
    - **High repeat**: same file read N times in one session. Coach the user to use `Read` with `offset` / `limit` once, or use `@file` to mention it explicitly so it stays in context.
    - **Low @-mention rate**: the user types raw paths or descriptions instead of `@path`. Show them an example: instead of "look at scanner.py", type `@agent_radar/scanner.py — what's the iteration logic doing?`.
+
+**If `direction = over`** (in-session hygiene already good — high @-mention rate or low repeat-reads — but config side is sparse): the user has internalized good context discipline, but it isn't propagated to CLAUDE.md. Look at the most-`@`-mentioned files / dirs in JSONL; propose adding the top 2–3 as `@import` lines in CLAUDE.md so they're auto-included next session.
 
 ## Closing the loop
 

@@ -115,6 +115,16 @@ def _gap_hint(dim: str, target_name: str,
     return "gap.generic", {"target": target_name, "dim": dim}
 
 
+# Noise-floor heuristics. Both have to be exceeded for a gap to surface.
+# - GAP_ABS_FLOOR: small absolute gaps (≤10 points) are noise either way.
+# - GAP_RATIO_FLOOR: a 16-point gap means very different things at
+#   config=30/usage=14 (ratio 0.53 — real headroom) vs config=90/usage=74
+#   (ratio 0.18 — basically aligned). Threshold is heuristic; calibrate
+#   after dogfood data is in.
+GAP_ABS_FLOOR = 10
+GAP_RATIO_FLOOR = 0.3
+
+
 def _rank_gaps(target_name: str, usage_target: dict | None,
                merged_scores: dict, top_n: int = 5,
                config_findings_by_dim: dict | None = None,
@@ -127,14 +137,27 @@ def _rank_gaps(target_name: str, usage_target: dict | None,
       - ``"over"``: activated > configured (heavy use relative to config —
         a win signal, often points to a quality concern in config docs)
 
-    Noise floor: ignore |gap| ≤ 10.
+    Noise floor: ``|gap| > GAP_ABS_FLOOR`` *and*
+    ``gap_ratio > GAP_RATIO_FLOOR``, where
+    ``gap_ratio = |gap| / max(config, usage, 1)``.
+
+    Using the larger side as denominator keeps the ratio symmetric across
+    directions — a gap of 16 is "missing 1/2 of the bigger side" regardless
+    of which side is bigger. A single-side denominator (e.g. always
+    ``config``) leaks when ``over`` direction lands on a tiny configured
+    score. See ``feedback_commensurable_kpi_units`` in user memory for why.
     """
     cfg_by = config_findings_by_dim or {}
     use_by = usage_findings_by_dim or {}
     rows = []
     for dim, scores in merged_scores.items():
         gap = scores["gap"]
-        if gap is None or abs(gap) <= 10:
+        if gap is None:
+            continue
+        # gap is non-None ⇒ both config and usage are numeric (merge.py:212).
+        denom = max(scores["config"], scores["usage"], 1)
+        gap_ratio = abs(gap) / denom
+        if abs(gap) <= GAP_ABS_FLOOR or gap_ratio < GAP_RATIO_FLOOR:
             continue
         direction = "under" if gap > 0 else "over"
         hint_key, hint_args = _gap_hint(dim, target_name, usage_target, direction)
@@ -142,6 +165,7 @@ def _rank_gaps(target_name: str, usage_target: dict | None,
             "dimension": dim,
             "gap": gap,                       # signed; negative = over-activated
             "abs_gap": abs(gap),              # for ranking
+            "gap_ratio": round(gap_ratio, 3), # 0..1, direction-agnostic
             "direction": direction,
             "config": scores["config"],
             "usage": scores["usage"],

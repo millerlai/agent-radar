@@ -438,6 +438,11 @@ def top_gaps_html(merged_targets, lang="en"):
     def _one(i: int, g: dict) -> str:
         direction = g.get("direction", "under" if g["gap"] > 0 else "over")
         gap_sign = f"+{g['gap']:.0f}" if g["gap"] > 0 else f"{g['gap']:.0f}"
+        # gap_ratio is in 0..1; append as % so a +16 gap reads very differently
+        # at ratio 0.18 (basically aligned) vs 0.53 (real headroom).
+        ratio = g.get("gap_ratio")
+        gap_disp = (f"{gap_sign} ({int(ratio * 100)}%)"
+                    if ratio is not None else gap_sign)
         usage_str = (f"{g['usage']:.0f}" if g["usage"] is not None else "N/A")
         cfg_rows = "".join(_finding_row(f, lang) for f in g.get("config_findings", []))
         use_rows = "".join(_finding_row(f, lang) for f in g.get("usage_findings", []))
@@ -455,7 +460,7 @@ def top_gaps_html(merged_targets, lang="en"):
                 <div class="gap-meta">
                   <span>{_t(lang,"gap_meta_config")}<b>{g['config']:.0f}</b></span>
                   <span>{_t(lang,"gap_meta_usage")}<b>{usage_str}</b></span>
-                  <span>{_t(lang,"gap_meta_gap")}<b>{gap_sign}</b></span>
+                  <span>{_t(lang,"gap_meta_gap")}<b>{gap_disp}</b></span>
                 </div>
               </div>
               <div class="gap-expand-icon" aria-label="{_t(lang,'expand_hint')}">▾</div>
