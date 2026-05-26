@@ -257,17 +257,23 @@ def _prompt_nested_candidate_selection(parent: Path, cands: list) -> list:
 def _resolve_scan_targets(path: Path) -> list:
     """Decide which path(s) to scan given a user-supplied ``path``.
 
-    - ``path`` is itself a git repo → ``[path]`` (unchanged behavior)
-    - ``path`` has nested scannable candidates (``.git`` / ``.claude/`` /
-      ``CLAUDE.md``):
+    Decision order (Claude signal beats ``.git`` — a parent dir like
+    ``~/projects`` often has a stale ``.git`` of its own but no Claude
+    content; what matters is what the user actually wants scanned):
+
+    - ``path`` has its OWN Claude signal (``CLAUDE.md`` or ``.claude/``)
+      → ``[path]``. Even if there are nested candidates, the user pointed
+      us at a configured project; scan THAT, not its parents.
+    - ``path`` has no own Claude signal but contains nested candidates
+      (any of ``.git`` / ``.claude/`` / ``CLAUDE.md``):
         - TTY: prompt the user; defaults are dirs with a Claude Code signal
         - non-TTY: scan the pre-selected (Claude-signal) candidates and
           report which ones; if none qualify, skip with a warning so the
           user can be explicit
     - ``path`` has none of the above → ``[path]`` (fallback for empty /
-      freshly-init'd dirs)
+      freshly-init'd dirs; lets users deliberately scan a bare directory)
     """
-    if _is_git_repo(path):
+    if _exists(path / "CLAUDE.md") or _exists(path / ".claude"):
         return [path]
     cands = _find_nested_candidates(path)
     if not cands:

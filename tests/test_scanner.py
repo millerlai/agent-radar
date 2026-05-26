@@ -471,7 +471,51 @@ class TestFindNestedCandidates:
 
 
 class TestResolveScanTargets:
-    def test_repo_path_returns_itself(self, tmp_path):
+    def test_path_with_own_claude_md_returns_itself(self, tmp_path):
+        p = _make_claude_md(tmp_path / "project")
+        assert _resolve_scan_targets(p) == [p]
+
+    def test_path_with_own_claude_dir_returns_itself(self, tmp_path):
+        p = _make_claude_dir(tmp_path / "project")
+        assert _resolve_scan_targets(p) == [p]
+
+    def test_own_claude_signal_short_circuits_picker_even_with_nested(
+        self, tmp_path, monkeypatch
+    ):
+        """If the user pointed at a configured project, scan THAT — not its children.
+
+        E.g. `agent-radar scan ./my-claude-project` should never trigger the
+        picker just because the project contains nested git submodules etc.
+        """
+        p = _make_claude_md(tmp_path / "project")
+        # Add a nested candidate that WOULD otherwise trigger the picker.
+        _make_claude_md(p / "submodule")
+        monkeypatch.setattr("sys.stdin", _fake_tty("q\n"))
+        # No prompt should fire — the parent's Claude signal wins.
+        assert _resolve_scan_targets(p) == [p]
+
+    def test_path_with_git_only_and_nested_triggers_picker(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """Reproduces the D:\\project bug.
+
+        Parent has a `.git` (e.g. an accidental stale one) but no Claude
+        signal of its own. It contains scannable subdirs. The picker MUST
+        fire — the `.git` at parent level should not short-circuit the
+        nested-candidate flow.
+        """
+        parent = tmp_path / "projects"
+        _make_git_repo(parent)
+        claude_child = _make_claude_md(parent / "active-project")
+        _make_git_repo(parent / "plain-child")
+        monkeypatch.setattr("sys.stdin", io.StringIO(""))  # non-TTY
+        result = _resolve_scan_targets(parent)
+        assert result == [claude_child]
+        assert "Auto-scanning" in capsys.readouterr().err
+
+    def test_path_with_git_only_no_nested_returns_itself_as_fallback(self, tmp_path):
+        """Bare git repo with no Claude content and no nested candidates →
+        scan as-is (fallback). The freshly-init'd repo case."""
         repo = _make_git_repo(tmp_path / "r")
         assert _resolve_scan_targets(repo) == [repo]
 
