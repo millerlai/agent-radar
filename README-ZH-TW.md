@@ -243,7 +243,6 @@ agent-radar report scan.json -o report.html
     [X] ai-hedge-func-claude-cli (CLAUDE.md, .claude/, git)
     [ ] ai-hedge-fund            (git)
     [X] auto-package-migration   (CLAUDE.md, .claude/, git)
-    [X] av-video-rename-tool     (CLAUDE.md, .claude/, git)
        ↓ 32 more below
   ↑/↓ move | Space toggle | Enter confirm | a all | n none | q quit
 ```
