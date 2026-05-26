@@ -7,6 +7,8 @@ import json
 
 from agent_radar.usage import merge as merge_mod
 from agent_radar.usage.merge import (
+    GAP_ABS_FLOOR,
+    GAP_RATIO_FLOOR,
     _gap_hint,
     _rank_gaps,
     merge,
@@ -92,16 +94,20 @@ class TestRankGaps:
         merged = {
             "skills": {"config": 80, "usage": 20, "gap": 60},
             "mcp": {"config": 50, "usage": 30, "gap": 20},
-            "automation": {"config": 40, "usage": 35, "gap": 5},  # noise floor
-            "claude_md": {"config": 30, "usage": None, "gap": None},  # no usage data
+            "automation": {"config": 40, "usage": 35, "gap": 5},  # absolute noise
+            "claude_md": {"config": 30, "usage": None, "gap": None},
         }
         gaps = _rank_gaps("repo", None, merged)
         dims = [g["dimension"] for g in gaps]
         assert dims == ["skills", "mcp"]
-        # each ranked gap carries hint_key+hint_args, no rendered string
         assert all("hint_key" in g and "hint_args" in g for g in gaps)
+        # Each surviving row carries gap_ratio in 0..1
+        for g in gaps:
+            assert 0 < g["gap_ratio"] <= 1
 
     def test_top_n_cap(self):
+        # gaps 45/60/75 all pass (ratios 0.45/0.60/0.75); 15/30 are filtered
+        # by the ratio floor (0.15/0.30), so only 3 survive even with top_n=5.
         merged = {
             f"dim{i}": {"config": 100, "usage": 100 - (i+1)*15, "gap": (i+1)*15}
             for i in range(5)
@@ -109,6 +115,35 @@ class TestRankGaps:
         gaps = _rank_gaps("repo", None, merged, top_n=3)
         assert len(gaps) == 3
         assert gaps[0]["gap"] >= gaps[1]["gap"] >= gaps[2]["gap"]
+
+    def test_relative_threshold_filters_low_ratio_at_same_abs_gap(self):
+        """Same abs gap, different densities — only the low-density one surfaces."""
+        merged = {
+            "low_density":  {"config": 30, "usage": 14, "gap": 16},  # ratio 0.53
+            "high_density": {"config": 90, "usage": 74, "gap": 16},  # ratio 0.18
+        }
+        gaps = _rank_gaps("repo", None, merged)
+        assert [g["dimension"] for g in gaps] == ["low_density"]
+        assert gaps[0]["gap_ratio"] > GAP_RATIO_FLOOR
+
+    def test_abs_gap_floor_blocks_low_score_pairs(self):
+        """A 0.6 ratio is meaningless when both sides are tiny — abs floor catches it."""
+        merged = {"tiny": {"config": 5, "usage": 1, "gap": 4}}  # ratio 0.8, but gap<=10
+        gaps = _rank_gaps("repo", None, merged)
+        assert gaps == []
+
+    def test_over_direction_uses_symmetric_denominator(self):
+        """gap_ratio uses max(config, usage) so 'over' direction isn't biased
+        toward a low-config denominator that would over-inflate the ratio."""
+        # config=10, usage=70 → gap=-60, abs=60.
+        # Single-side (config): 60/10 = 6.0 — absurd.
+        # Symmetric:            60/70 ≈ 0.86 — meaningful.
+        merged = {"automation": {"config": 10, "usage": 70, "gap": -60}}
+        gaps = _rank_gaps("repo", None, merged)
+        assert len(gaps) == 1
+        assert gaps[0]["direction"] == "over"
+        assert 0 < gaps[0]["gap_ratio"] <= 1
+        assert gaps[0]["gap"] == -60
 
 
 # ---------------------------------------------------------------------------
