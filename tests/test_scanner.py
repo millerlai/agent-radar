@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import subprocess
 from pathlib import Path
@@ -13,8 +14,12 @@ from agent_radar.scanner import (
     Finding,
     _clamp,
     _exists,
+    _find_nested_candidates,
     _git_log_count,
+    _is_git_repo,
+    _NestedCandidate,
     _read,
+    _resolve_scan_targets,
     detect_automation,
     detect_claude_md,
     detect_context_hygiene,
@@ -354,3 +359,222 @@ class TestScannerMainCli:
         # 0.2.0: no level_thresholds anymore
         assert "level_thresholds" not in data
         assert len(data["targets"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Nested-repo resolution (parent-of-repos UX)
+# ---------------------------------------------------------------------------
+
+def _make_git_repo(p: Path) -> Path:
+    """Make ``p`` look like a git repo (no real git init needed)."""
+    p.mkdir(parents=True, exist_ok=True)
+    (p / ".git").mkdir()
+    return p
+
+
+def _make_claude_dir(p: Path) -> Path:
+    """Make ``p`` look like it has a Claude Code .claude/ folder."""
+    p.mkdir(parents=True, exist_ok=True)
+    (p / ".claude").mkdir()
+    return p
+
+
+def _make_claude_md(p: Path) -> Path:
+    """Make ``p`` contain a CLAUDE.md."""
+    p.mkdir(parents=True, exist_ok=True)
+    (p / "CLAUDE.md").write_text("# notes\n", encoding="utf-8")
+    return p
+
+
+def _fake_tty(content: str):
+    """Return a stdin-like object with isatty()->True and given content."""
+    s = io.StringIO(content)
+    s.isatty = lambda: True  # type: ignore[assignment]
+    return s
+
+
+class TestIsGitRepo:
+    def test_dir_with_dotgit_dir_is_repo(self, tmp_path):
+        _make_git_repo(tmp_path / "r")
+        assert _is_git_repo(tmp_path / "r") is True
+
+    def test_dir_with_dotgit_file_is_repo(self, tmp_path):
+        # git worktrees use a `.git` *file*, not a dir.
+        r = tmp_path / "r"
+        r.mkdir()
+        (r / ".git").write_text("gitdir: /elsewhere", encoding="utf-8")
+        assert _is_git_repo(r) is True
+
+    def test_dir_without_dotgit_is_not_repo(self, tmp_path):
+        d = tmp_path / "plain"
+        d.mkdir()
+        assert _is_git_repo(d) is False
+
+
+class TestNestedCandidate:
+    def test_default_requires_claude_signal(self, tmp_path):
+        # git-only candidate → not default
+        c = _NestedCandidate(path=tmp_path, has_git=True)
+        assert c.is_default is False
+        # any Claude signal → default
+        assert _NestedCandidate(path=tmp_path, has_claude_md=True).is_default
+        assert _NestedCandidate(path=tmp_path, has_claude_dir=True).is_default
+
+    def test_signals_label(self, tmp_path):
+        c = _NestedCandidate(
+            path=tmp_path, has_git=True, has_claude_dir=True, has_claude_md=True,
+        )
+        assert c.signals_label() == "CLAUDE.md, .claude/, git"
+        # all-false produces a dash sentinel — should not normally happen but
+        # the function shouldn't blow up on a constructed-empty candidate.
+        assert _NestedCandidate(path=tmp_path).signals_label() == "—"
+
+
+class TestFindNestedCandidates:
+    def test_picks_up_git_claude_dir_and_claude_md(self, tmp_path):
+        _make_git_repo(tmp_path / "git-only")           # has .git only
+        _make_claude_dir(tmp_path / "claude-dir-only")  # has .claude/ only
+        _make_claude_md(tmp_path / "claude-md-only")    # has CLAUDE.md only
+        # mixed signals
+        mixed = tmp_path / "mixed"
+        _make_git_repo(mixed)
+        _make_claude_dir(mixed)
+        _make_claude_md(mixed)
+        # bare dir — should NOT be a candidate
+        (tmp_path / "bare").mkdir()
+        # loose file at parent — never a candidate
+        (tmp_path / "loose.txt").write_text("x", encoding="utf-8")
+
+        cands = _find_nested_candidates(tmp_path)
+        by_name = {c.path.name: c for c in cands}
+        assert set(by_name) == {"git-only", "claude-dir-only", "claude-md-only", "mixed"}
+        assert by_name["git-only"].has_git and not by_name["git-only"].has_claude_signal
+        assert by_name["claude-dir-only"].has_claude_dir
+        assert by_name["claude-md-only"].has_claude_md
+        m = by_name["mixed"]
+        assert m.has_git and m.has_claude_dir and m.has_claude_md
+
+    def test_sorted_case_insensitive(self, tmp_path):
+        _make_git_repo(tmp_path / "Zeta")
+        _make_claude_md(tmp_path / "alpha")
+        _make_git_repo(tmp_path / "Mango")
+        names = [c.path.name for c in _find_nested_candidates(tmp_path)]
+        assert names == ["alpha", "Mango", "Zeta"]
+
+    def test_does_not_recurse(self, tmp_path):
+        _make_git_repo(tmp_path / "intermediate" / "deep-repo")
+        # intermediate itself has neither .git nor .claude/ nor CLAUDE.md
+        assert _find_nested_candidates(tmp_path) == []
+
+    def test_empty_dir_returns_empty(self, tmp_path):
+        assert _find_nested_candidates(tmp_path) == []
+
+
+class TestResolveScanTargets:
+    def test_repo_path_returns_itself(self, tmp_path):
+        repo = _make_git_repo(tmp_path / "r")
+        assert _resolve_scan_targets(repo) == [repo]
+
+    def test_no_candidates_returns_itself_as_fallback(self, tmp_path):
+        d = tmp_path / "plain"
+        d.mkdir()
+        assert _resolve_scan_targets(d) == [d]
+
+    def test_non_tty_auto_scans_claude_signal_dirs(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        claude_md_dir = _make_claude_md(tmp_path / "active")
+        # git-only (no Claude signals) → should be skipped, not scanned
+        _make_git_repo(tmp_path / "plain-git")
+        monkeypatch.setattr("sys.stdin", io.StringIO(""))
+        result = _resolve_scan_targets(tmp_path)
+        assert result == [claude_md_dir]
+        err = capsys.readouterr().err
+        assert "Auto-scanning" in err
+        assert "active" in err
+        assert "skipped 1 dir" in err
+
+    def test_non_tty_no_claude_signals_skips_with_warning(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        _make_git_repo(tmp_path / "a")
+        _make_git_repo(tmp_path / "b")
+        monkeypatch.setattr("sys.stdin", io.StringIO(""))
+        result = _resolve_scan_targets(tmp_path)
+        assert result == []
+        err = capsys.readouterr().err
+        assert "none have Claude Code signals" in err
+
+    def test_tty_enter_accepts_defaults(self, tmp_path, monkeypatch):
+        claude_dir_a = _make_claude_md(tmp_path / "with-claude")
+        _make_git_repo(tmp_path / "plain-git")
+        # Empty input == press Enter == accept defaults
+        monkeypatch.setattr("sys.stdin", _fake_tty("\n"))
+        result = _resolve_scan_targets(tmp_path)
+        assert result == [claude_dir_a]
+
+    def test_tty_eof_treated_as_accept_defaults(self, tmp_path, monkeypatch):
+        claude_md_dir = _make_claude_md(tmp_path / "with-claude")
+        _make_git_repo(tmp_path / "plain-git")
+        # No newline, immediate EOF → defaults applied
+        monkeypatch.setattr("sys.stdin", _fake_tty(""))
+        result = _resolve_scan_targets(tmp_path)
+        assert result == [claude_md_dir]
+
+    def test_tty_user_overrides_defaults_with_indices(self, tmp_path, monkeypatch):
+        _make_claude_md(tmp_path / "alpha")          # would be default
+        beta = _make_git_repo(tmp_path / "beta")     # NOT a default
+        _make_claude_dir(tmp_path / "gamma")         # would be default
+        # User explicitly picks ONLY beta
+        monkeypatch.setattr("sys.stdin", _fake_tty("2\n"))
+        result = _resolve_scan_targets(tmp_path)
+        assert result == [beta]
+
+    def test_tty_all_returns_all_candidates(self, tmp_path, monkeypatch):
+        a = _make_claude_md(tmp_path / "alpha")
+        b = _make_git_repo(tmp_path / "beta")
+        monkeypatch.setattr("sys.stdin", _fake_tty("a\n"))
+        assert _resolve_scan_targets(tmp_path) == [a, b]
+
+    def test_tty_none_returns_empty(self, tmp_path, monkeypatch):
+        _make_claude_md(tmp_path / "alpha")
+        monkeypatch.setattr("sys.stdin", _fake_tty("n\n"))
+        assert _resolve_scan_targets(tmp_path) == []
+
+    def test_tty_quit_returns_empty(self, tmp_path, monkeypatch):
+        _make_claude_md(tmp_path / "alpha")
+        monkeypatch.setattr("sys.stdin", _fake_tty("q\n"))
+        assert _resolve_scan_targets(tmp_path) == []
+
+    def test_tty_reprompts_on_garbage(self, tmp_path, monkeypatch, capsys):
+        a = _make_claude_md(tmp_path / "alpha")
+        # First "nope" rejected → re-prompt → "1" succeeds
+        monkeypatch.setattr("sys.stdin", _fake_tty("nope\n1\n"))
+        assert _resolve_scan_targets(tmp_path) == [a]
+        assert "invalid input" in capsys.readouterr().err
+
+    def test_prompt_shows_checkbox_markers(self, tmp_path, monkeypatch, capsys):
+        _make_claude_md(tmp_path / "alpha")
+        _make_git_repo(tmp_path / "beta")
+        monkeypatch.setattr("sys.stdin", _fake_tty("\n"))
+        _resolve_scan_targets(tmp_path)
+        err = capsys.readouterr().err
+        # pre-selected gets [*], not pre-selected gets [ ]
+        assert "[*]" in err
+        assert "[ ]" in err
+
+
+class TestScannerMainNestedFlow:
+    def test_main_via_picker_accepts_defaults(self, tmp_path, monkeypatch):
+        """CLI: non-repo parent + TTY + Enter → scans only Claude-signal dirs."""
+        _write(tmp_path / "claude-active" / "CLAUDE.md", "x")
+        _make_git_repo(tmp_path / "plain-git")
+        out = tmp_path / "scan.json"
+
+        # Empty line == accept defaults
+        monkeypatch.setattr("sys.stdin", _fake_tty("\n"))
+        monkeypatch.setattr("sys.argv", ["scanner", str(tmp_path), "-o", str(out)])
+
+        scanner.main()
+        data = json.loads(out.read_text(encoding="utf-8"))
+        assert [t["name"] for t in data["targets"]] == ["claude-active"]

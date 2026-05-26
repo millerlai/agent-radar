@@ -229,6 +229,31 @@ agent-radar scan /repos/a /repos/b /repos/c -o scan.json
 agent-radar report scan.json -o report.html
 ```
 
+**情境 4 · 在 repo 父目錄裡跑 (互動選單)**
+
+如果你給的路徑**本身不是 git repo**,但底下有可掃的子目錄
+(包含 `.git/`、`.claude/`、或 `CLAUDE.md` 任一者),agent-radar 會列
+出 checkbox 清單。已有 Claude Code 訊號 (`CLAUDE.md` 或 `.claude/`)
+的子目錄會**預設打勾**;只有 git repo 但沒有 Claude 訊號的就列出來
+但不勾,讓你自己決定要不要納入:
+
+```text
+[i] /home/you/projects is not a git repo, but contains 4 candidate dirs (2 pre-selected):
+  [*]  1) agent-radar     (CLAUDE.md, .claude/, git)
+  [*]  2) my-project      (CLAUDE.md, git)
+  [ ]  3) sandbox         (git)
+  [ ]  4) website         (git)
+
+  [*] = has Claude Code signal (CLAUDE.md or .claude/)
+Press Enter to scan pre-selected, or type indices ("1,3"), "a" all, "n" none, "q" quit:
+```
+
+按 Enter 就掃預設打勾的;要覆寫就輸入 indices。
+
+非互動環境 (CI、pipe):
+- 有 Claude 訊號的子目錄會被自動掃 (stderr 印出清單)。
+- 完全沒有 Claude 訊號時,跳過該路徑並提示 user 明確指定。
+
 ### 加上實際運用度量測 (完整雙層分析)
 
 `agent-radar session` 讀本機 `~/.claude/projects/*.jsonl`,輸出 session 中

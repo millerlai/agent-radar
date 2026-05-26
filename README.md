@@ -242,6 +242,34 @@ agent-radar scan /repos/a /repos/b /repos/c -o scan.json
 agent-radar report scan.json -o report.html
 ```
 
+**Scenario 4 · Run in a repos-parent directory (interactive picker)**
+
+If the path you pass is **not** a git repo but contains scannable
+subdirectories (any of `.git/`, `.claude/`, or `CLAUDE.md`), agent-radar
+lists them with checkboxes. Dirs that already show Claude Code signal
+(`CLAUDE.md` or `.claude/`) are **pre-selected**; pure git repos with no
+Claude signal are listed but unchecked, so you decide whether to include
+them:
+
+```text
+[i] /home/you/projects is not a git repo, but contains 4 candidate dirs (2 pre-selected):
+  [*]  1) agent-radar     (CLAUDE.md, .claude/, git)
+  [*]  2) my-project      (CLAUDE.md, git)
+  [ ]  3) sandbox         (git)
+  [ ]  4) website         (git)
+
+  [*] = has Claude Code signal (CLAUDE.md or .claude/)
+Press Enter to scan pre-selected, or type indices ("1,3"), "a" all, "n" none, "q" quit:
+```
+
+Press Enter to scan only the pre-selected ones, or override with explicit
+indices.
+
+If stdin isn't a TTY (CI, pipes):
+- Dirs with Claude Code signal are auto-scanned (with a summary printed to stderr).
+- If no candidate has any Claude signal, the path is skipped with a warning
+  so the user can pass repos explicitly.
+
 ### Add actual-usage measurement (full two-layer analysis)
 
 `agent-radar session` reads local `~/.claude/projects/*.jsonl` and emits
