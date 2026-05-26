@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "claude-agent-radar"
-version = "0.2.5"
+version = "0.3.0"
 description = "Activation-gap diagnostic for Claude Code — compares what's configured on disk against what actually fires in sessions, across five capability axes."
 readme = "README.md"
 requires-python = ">=3.8"
