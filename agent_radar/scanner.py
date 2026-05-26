@@ -124,6 +124,183 @@ def _clamp(v: float, lo: float = 0.0, hi: float = None) -> float:
     return v
 
 
+def _is_git_repo(p: Path) -> bool:
+    """True if ``p`` looks like a git repo (has a ``.git`` entry).
+
+    Worktrees use a ``.git`` file (not a dir); both count.
+    """
+    return _exists(p / ".git")
+
+
+@dataclass
+class _NestedCandidate:
+    """A direct subdirectory of the user-supplied path that we *might* scan.
+
+    Carries which signals it has so the prompt can label it and decide whether
+    it should default to selected.
+    """
+    path: Path
+    has_git: bool = False
+    has_claude_dir: bool = False
+    has_claude_md: bool = False
+
+    @property
+    def has_claude_signal(self) -> bool:
+        return self.has_claude_dir or self.has_claude_md
+
+    @property
+    def is_default(self) -> bool:
+        """Pre-selected iff the dir already shows Claude Code activity.
+
+        Pure git repos with no CLAUDE.md / .claude/ get listed but not
+        pre-checked — agent-radar has nothing useful to say about them yet.
+        """
+        return self.has_claude_signal
+
+    def signals_label(self) -> str:
+        parts = []
+        if self.has_claude_md:
+            parts.append("CLAUDE.md")
+        if self.has_claude_dir:
+            parts.append(".claude/")
+        if self.has_git:
+            parts.append("git")
+        return ", ".join(parts) if parts else "—"
+
+
+def _find_nested_candidates(p: Path) -> list:
+    """Direct subdirectories of ``p`` that look scannable, sorted by name.
+
+    A candidate has ANY of: ``.git`` / ``.claude/`` / ``CLAUDE.md``. Depth is
+    1 by design — recursing risks descending into ``node_modules`` and
+    similar pits. Symlinks are skipped to avoid cycles.
+    """
+    out = []
+    try:
+        for d in p.iterdir():
+            try:
+                if d.is_symlink() or not d.is_dir():
+                    continue
+                has_git = _is_git_repo(d)
+                has_claude_dir = _exists(d / ".claude")
+                has_claude_md = _exists(d / "CLAUDE.md")
+                if has_git or has_claude_dir or has_claude_md:
+                    out.append(_NestedCandidate(
+                        path=d,
+                        has_git=has_git,
+                        has_claude_dir=has_claude_dir,
+                        has_claude_md=has_claude_md,
+                    ))
+            except OSError:
+                continue
+    except (OSError, PermissionError):
+        return []
+    out.sort(key=lambda c: c.path.name.lower())
+    return out
+
+
+def _prompt_nested_candidate_selection(parent: Path, cands: list) -> list:
+    """Interactive picker showing checkboxes + signal labels.
+
+    Pre-selected = any Claude Code signal. Press Enter to accept the default
+    set, or type explicit indices ("1,3"), "a" for all, "n" for none, "q"
+    to quit. Returns the chosen paths in display order.
+    """
+    n_default = sum(1 for c in cands if c.is_default)
+    sys.stderr.write(
+        f"[i] {parent} is not a git repo, but contains "
+        f"{len(cands)} candidate dirs ({n_default} pre-selected):\n"
+    )
+    for i, c in enumerate(cands, 1):
+        mark = "*" if c.is_default else " "
+        sys.stderr.write(
+            f"  [{mark}] {i:>2}) {c.path.name}   ({c.signals_label()})\n"
+        )
+    sys.stderr.write("\n  [*] = has Claude Code signal (CLAUDE.md or .claude/)\n")
+    while True:
+        sys.stderr.write(
+            "Press Enter to scan pre-selected, "
+            'or type indices ("1,3"), "a" all, "n" none, "q" quit: '
+        )
+        sys.stderr.flush()
+        line = sys.stdin.readline()
+        if not line:  # EOF — treat as accept defaults
+            return [c.path for c in cands if c.is_default]
+        raw = line.strip().lower()
+        if not raw:
+            return [c.path for c in cands if c.is_default]
+        if raw in ("q", "quit", "exit"):
+            return []
+        if raw in ("n", "none"):
+            return []
+        if raw in ("a", "all"):
+            return [c.path for c in cands]
+        try:
+            indices = [int(x.strip()) for x in raw.split(",") if x.strip()]
+        except ValueError:
+            sys.stderr.write(
+                "[err] invalid input — use comma-separated numbers, 'a', 'n', or 'q'.\n"
+            )
+            continue
+        if not indices or any(i < 1 or i > len(cands) for i in indices):
+            sys.stderr.write(f"[err] indices must be in 1..{len(cands)}\n")
+            continue
+        seen = set()
+        chosen = []
+        for i in indices:
+            if i not in seen:
+                seen.add(i)
+                chosen.append(cands[i - 1].path)
+        return chosen
+
+
+def _resolve_scan_targets(path: Path) -> list:
+    """Decide which path(s) to scan given a user-supplied ``path``.
+
+    - ``path`` is itself a git repo → ``[path]`` (unchanged behavior)
+    - ``path`` has nested scannable candidates (``.git`` / ``.claude/`` /
+      ``CLAUDE.md``):
+        - TTY: prompt the user; defaults are dirs with a Claude Code signal
+        - non-TTY: scan the pre-selected (Claude-signal) candidates and
+          report which ones; if none qualify, skip with a warning so the
+          user can be explicit
+    - ``path`` has none of the above → ``[path]`` (fallback for empty /
+      freshly-init'd dirs)
+    """
+    if _is_git_repo(path):
+        return [path]
+    cands = _find_nested_candidates(path)
+    if not cands:
+        return [path]
+    if not sys.stdin.isatty():
+        defaults = [c for c in cands if c.is_default]
+        if defaults:
+            sys.stderr.write(
+                f"[i] {path} is not a git repo. Auto-scanning "
+                f"{len(defaults)} of {len(cands)} candidate dirs with Claude Code signals:\n"
+            )
+            for c in defaults:
+                sys.stderr.write(f"        {c.path.name}   ({c.signals_label()})\n")
+            skipped = [c for c in cands if not c.is_default]
+            if skipped:
+                sys.stderr.write(
+                    f"        (skipped {len(skipped)} dir(s) without Claude signal — "
+                    "pass them explicitly to include)\n"
+                )
+            return [c.path for c in defaults]
+        sys.stderr.write(
+            f"[warn] {path} is not a git repo. Found {len(cands)} candidate dirs "
+            "but none have Claude Code signals:\n"
+        )
+        for c in cands:
+            sys.stderr.write(f"        {c.path.name}   ({c.signals_label()})\n")
+        sys.stderr.write(
+            "        Pass them explicitly or run interactively to pick a subset.\n"
+        )
+        return []
+    return _prompt_nested_candidate_selection(path, cands)
+
+
 # ----------------------------------------------------------------------------
 # Detection logic
 # ----------------------------------------------------------------------------
@@ -511,7 +688,10 @@ def main():
         if not path.exists():
             print(f"[warn] path missing, skipped: {path}", file=sys.stderr)
             continue
-        targets.append(score_target(path, path.name, is_home=False, home_seen=home_seen))
+        for repo_path in _resolve_scan_targets(path):
+            targets.append(
+                score_target(repo_path, repo_path.name,
+                             is_home=False, home_seen=home_seen))
 
     if args.include_home and home_seen:
         targets.append(score_target(home_claude.parent, "~ (user-space)",
