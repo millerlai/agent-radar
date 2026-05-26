@@ -38,6 +38,7 @@ Findings carry language-neutral keys (``label_key`` / ``detail_key`` +
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field, asdict
@@ -199,6 +200,234 @@ def _find_nested_candidates(p: Path) -> list:
     return out
 
 
+def _enable_ansi_on_windows() -> None:
+    """Ask Windows to interpret ANSI escape sequences in stderr.
+
+    A no-op on non-Windows and silently ignored if anything goes wrong —
+    falling back to garbled output is the worst case; the picker still
+    functions mechanically.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        ENABLE_VT = 0x0004
+        STDERR_HANDLE = -12
+        h = kernel32.GetStdHandle(STDERR_HANDLE)
+        mode = ctypes.c_uint()
+        if kernel32.GetConsoleMode(h, ctypes.byref(mode)):
+            kernel32.SetConsoleMode(h, mode.value | ENABLE_VT)
+    except Exception:
+        pass
+
+
+def _can_use_interactive_picker() -> bool:
+    """True iff we can run the keyboard-driven checkbox picker.
+
+    Requires a TTY stdin AND access to the platform-specific raw-key
+    facility (``msvcrt`` on Windows, ``termios`` on Unix).
+    """
+    if not sys.stdin.isatty():
+        return False
+    if sys.platform == "win32":
+        try:
+            import msvcrt  # noqa: F401
+            return True
+        except ImportError:
+            return False
+    try:
+        import termios  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _read_key():
+    """Block waiting for one keystroke. Returns a normalized name.
+
+    Recognized: ``UP``, ``DOWN``, ``ENTER``, ``SPACE``, ``QUIT``, ``ALL``,
+    ``NONE``. Unrecognized keys return ``None`` (caller usually loops).
+    Ctrl-C is re-raised as ``KeyboardInterrupt`` so the user can break
+    out cleanly.
+
+    Caller is responsible for ensuring stdin is a TTY.
+    """
+    if sys.platform == "win32":
+        import msvcrt
+        ch = msvcrt.getch()
+        if ch in (b"\x00", b"\xe0"):  # extended-key prefix; arrow next
+            ch2 = msvcrt.getch()
+            if ch2 == b"H":
+                return "UP"
+            if ch2 == b"P":
+                return "DOWN"
+            return None
+        if ch in (b"\r", b"\n"):
+            return "ENTER"
+        if ch == b" ":
+            return "SPACE"
+        if ch in (b"q", b"Q", b"\x1b"):
+            return "QUIT"
+        if ch in (b"a", b"A"):
+            return "ALL"
+        if ch in (b"n", b"N"):
+            return "NONE"
+        if ch == b"\x03":
+            raise KeyboardInterrupt
+        return None
+
+    import select
+    import termios
+    import tty
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+        if ch == "\x1b":
+            # Could be ESC alone or the start of CSI (arrow keys: ESC [ A/B).
+            # Use a tiny non-blocking peek for the continuation.
+            if select.select([sys.stdin], [], [], 0.05)[0]:
+                seq = sys.stdin.read(2)
+                if seq == "[A":
+                    return "UP"
+                if seq == "[B":
+                    return "DOWN"
+                return None
+            return "QUIT"
+        if ch in ("\r", "\n"):
+            return "ENTER"
+        if ch == " ":
+            return "SPACE"
+        if ch in ("q", "Q"):
+            return "QUIT"
+        if ch in ("a", "A"):
+            return "ALL"
+        if ch in ("n", "N"):
+            return "NONE"
+        if ch == "\x03":
+            raise KeyboardInterrupt
+        return None
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def _draw_checkbox_picker(parent, candidates, selected, cursor,
+                          page_start, page_size, prev_lines):
+    """Render one frame of the checkbox picker to stderr.
+
+    Returns ``(new_page_start, lines_written)`` so the next frame knows how
+    many lines to clear before re-drawing.
+    """
+    n = len(candidates)
+    # Keep cursor visible by scrolling the visible window.
+    if cursor < page_start:
+        page_start = cursor
+    elif cursor >= page_start + page_size:
+        page_start = cursor - page_size + 1
+
+    # Clear previous render: cursor-up then ANSI "erase below".
+    if prev_lines:
+        sys.stderr.write(f"\x1b[{prev_lines}A\x1b[J")
+
+    name_w = max((len(c.path.name) for c in candidates), default=10)
+    name_w = min(name_w, 40)  # cap to keep one line per row on narrow terms
+    lines = 0
+    n_sel = sum(selected)
+
+    sys.stderr.write(
+        f"[i] {parent} has {n} candidate dirs ({n_sel} selected):\n"
+    )
+    lines += 1
+
+    if page_start > 0:
+        sys.stderr.write(f"      ↑ {page_start} more above\n")
+        lines += 1
+
+    end = min(page_start + page_size, n)
+    for i in range(page_start, end):
+        c = candidates[i]
+        mark = "X" if selected[i] else " "
+        pointer = ">" if i == cursor else " "
+        name = c.path.name
+        if len(name) > name_w:
+            name = name[: name_w - 1] + "…"
+        sys.stderr.write(
+            f"  {pointer} [{mark}] {name:<{name_w}}  ({c.signals_label()})\n"
+        )
+        lines += 1
+
+    if end < n:
+        sys.stderr.write(f"      ↓ {n - end} more below\n")
+        lines += 1
+
+    sys.stderr.write(
+        "  ↑/↓ move | Space toggle | Enter confirm | "
+        "a all | n none | q quit\n"
+    )
+    lines += 1
+    sys.stderr.flush()
+    return page_start, lines
+
+
+def _interactive_checkbox_picker(parent: Path, candidates: list,
+                                 _read_key_fn=None) -> list:
+    """Keyboard-driven checkbox picker. stdlib-only, ANSI-based.
+
+    ``_read_key_fn`` is injected by tests; production code lets it default
+    to the real platform key reader.
+    """
+    read_key = _read_key_fn or _read_key
+    n = len(candidates)
+    selected = [c.is_default for c in candidates]
+    cursor = 0
+    page_start = 0
+
+    _enable_ansi_on_windows()
+
+    # Leave headroom for header / scroll indicators / help; minimum 5 rows.
+    try:
+        term_rows = shutil.get_terminal_size().lines
+    except Exception:
+        term_rows = 24
+    page_size = max(5, min(n, term_rows - 5))
+
+    page_start, prev_lines = _draw_checkbox_picker(
+        parent, candidates, selected, cursor, page_start, page_size,
+        prev_lines=0,
+    )
+
+    while True:
+        try:
+            key = read_key()
+        except KeyboardInterrupt:
+            sys.stderr.write("\n")
+            return []
+        if key == "UP":
+            cursor = (cursor - 1) % n
+        elif key == "DOWN":
+            cursor = (cursor + 1) % n
+        elif key == "SPACE":
+            selected[cursor] = not selected[cursor]
+        elif key == "ENTER":
+            sys.stderr.write("\n")
+            return [c.path for c, s in zip(candidates, selected) if s]
+        elif key == "ALL":
+            selected = [True] * n
+        elif key == "NONE":
+            selected = [False] * n
+        elif key == "QUIT":
+            sys.stderr.write("\n")
+            return []
+        else:
+            continue  # unknown key, no redraw needed
+        page_start, prev_lines = _draw_checkbox_picker(
+            parent, candidates, selected, cursor, page_start, page_size,
+            prev_lines,
+        )
+
+
 def _prompt_nested_candidate_selection(parent: Path, cands: list) -> list:
     """Interactive picker showing checkboxes + signal labels.
 
@@ -304,6 +533,11 @@ def _resolve_scan_targets(path: Path) -> list:
             "        Pass them explicitly or run interactively to pick a subset.\n"
         )
         return []
+    # TTY: prefer the keyboard checkbox picker when the platform supports
+    # raw key reads. Fall back to the text-index picker on niche envs that
+    # lack msvcrt / termios so behavior degrades gracefully.
+    if _can_use_interactive_picker():
+        return _interactive_checkbox_picker(path, cands)
     return _prompt_nested_candidate_selection(path, cands)
 
 

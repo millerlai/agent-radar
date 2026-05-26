@@ -16,6 +16,7 @@ from agent_radar.scanner import (
     _exists,
     _find_nested_candidates,
     _git_log_count,
+    _interactive_checkbox_picker,
     _is_git_repo,
     _NestedCandidate,
     _read,
@@ -393,6 +394,19 @@ def _fake_tty(content: str):
     return s
 
 
+def _force_text_picker(monkeypatch):
+    """Pin _resolve_scan_targets to the legacy text picker path.
+
+    The new interactive picker uses platform raw-key reads (msvcrt.getch /
+    termios) which can't be mocked through ``sys.stdin``. Tests that fake
+    stdin with text content target the text fallback; call this from those
+    tests so routing actually lands there.
+    """
+    monkeypatch.setattr(
+        "agent_radar.scanner._can_use_interactive_picker", lambda: False,
+    )
+
+
 class TestIsGitRepo:
     def test_dir_with_dotgit_dir_is_repo(self, tmp_path):
         _make_git_repo(tmp_path / "r")
@@ -549,9 +563,17 @@ class TestResolveScanTargets:
         err = capsys.readouterr().err
         assert "none have Claude Code signals" in err
 
+    # ------------------------------------------------------------------
+    # Text-picker fallback path — exercised when the keyboard-driven
+    # interactive picker isn't available (e.g. niche platform without
+    # msvcrt / termios). Tests force the fallback so we can drive it via
+    # mocked stdin text.
+    # ------------------------------------------------------------------
+
     def test_tty_enter_accepts_defaults(self, tmp_path, monkeypatch):
         claude_dir_a = _make_claude_md(tmp_path / "with-claude")
         _make_git_repo(tmp_path / "plain-git")
+        _force_text_picker(monkeypatch)
         # Empty input == press Enter == accept defaults
         monkeypatch.setattr("sys.stdin", _fake_tty("\n"))
         result = _resolve_scan_targets(tmp_path)
@@ -560,6 +582,7 @@ class TestResolveScanTargets:
     def test_tty_eof_treated_as_accept_defaults(self, tmp_path, monkeypatch):
         claude_md_dir = _make_claude_md(tmp_path / "with-claude")
         _make_git_repo(tmp_path / "plain-git")
+        _force_text_picker(monkeypatch)
         # No newline, immediate EOF → defaults applied
         monkeypatch.setattr("sys.stdin", _fake_tty(""))
         result = _resolve_scan_targets(tmp_path)
@@ -569,6 +592,7 @@ class TestResolveScanTargets:
         _make_claude_md(tmp_path / "alpha")          # would be default
         beta = _make_git_repo(tmp_path / "beta")     # NOT a default
         _make_claude_dir(tmp_path / "gamma")         # would be default
+        _force_text_picker(monkeypatch)
         # User explicitly picks ONLY beta
         monkeypatch.setattr("sys.stdin", _fake_tty("2\n"))
         result = _resolve_scan_targets(tmp_path)
@@ -577,21 +601,25 @@ class TestResolveScanTargets:
     def test_tty_all_returns_all_candidates(self, tmp_path, monkeypatch):
         a = _make_claude_md(tmp_path / "alpha")
         b = _make_git_repo(tmp_path / "beta")
+        _force_text_picker(monkeypatch)
         monkeypatch.setattr("sys.stdin", _fake_tty("a\n"))
         assert _resolve_scan_targets(tmp_path) == [a, b]
 
     def test_tty_none_returns_empty(self, tmp_path, monkeypatch):
         _make_claude_md(tmp_path / "alpha")
+        _force_text_picker(monkeypatch)
         monkeypatch.setattr("sys.stdin", _fake_tty("n\n"))
         assert _resolve_scan_targets(tmp_path) == []
 
     def test_tty_quit_returns_empty(self, tmp_path, monkeypatch):
         _make_claude_md(tmp_path / "alpha")
+        _force_text_picker(monkeypatch)
         monkeypatch.setattr("sys.stdin", _fake_tty("q\n"))
         assert _resolve_scan_targets(tmp_path) == []
 
     def test_tty_reprompts_on_garbage(self, tmp_path, monkeypatch, capsys):
         a = _make_claude_md(tmp_path / "alpha")
+        _force_text_picker(monkeypatch)
         # First "nope" rejected → re-prompt → "1" succeeds
         monkeypatch.setattr("sys.stdin", _fake_tty("nope\n1\n"))
         assert _resolve_scan_targets(tmp_path) == [a]
@@ -600,6 +628,7 @@ class TestResolveScanTargets:
     def test_prompt_shows_checkbox_markers(self, tmp_path, monkeypatch, capsys):
         _make_claude_md(tmp_path / "alpha")
         _make_git_repo(tmp_path / "beta")
+        _force_text_picker(monkeypatch)
         monkeypatch.setattr("sys.stdin", _fake_tty("\n"))
         _resolve_scan_targets(tmp_path)
         err = capsys.readouterr().err
@@ -615,10 +644,154 @@ class TestScannerMainNestedFlow:
         _make_git_repo(tmp_path / "plain-git")
         out = tmp_path / "scan.json"
 
-        # Empty line == accept defaults
+        # Drive via the text fallback (interactive picker uses raw key reads
+        # that bypass sys.stdin and would hang in tests).
+        _force_text_picker(monkeypatch)
         monkeypatch.setattr("sys.stdin", _fake_tty("\n"))
         monkeypatch.setattr("sys.argv", ["scanner", str(tmp_path), "-o", str(out)])
 
         scanner.main()
         data = json.loads(out.read_text(encoding="utf-8"))
         assert [t["name"] for t in data["targets"]] == ["claude-active"]
+
+
+# ---------------------------------------------------------------------------
+# Interactive (keyboard) checkbox picker — unit tests via injected key stream.
+# ---------------------------------------------------------------------------
+
+class TestInteractiveCheckboxPicker:
+    def _keys(self, *seq):
+        """Make a _read_key_fn that yields the given key names in order."""
+        it = iter(seq)
+        return lambda: next(it)
+
+    def test_enter_returns_defaults(self, tmp_path):
+        a = _make_claude_md(tmp_path / "active")
+        _make_git_repo(tmp_path / "plain")  # not default
+        cands = _find_nested_candidates(tmp_path)
+        result = _interactive_checkbox_picker(
+            tmp_path, cands, _read_key_fn=self._keys("ENTER"),
+        )
+        assert result == [a]
+
+    def test_space_toggles_off_a_default(self, tmp_path):
+        _make_claude_md(tmp_path / "a")
+        b = _make_claude_md(tmp_path / "b")
+        cands = _find_nested_candidates(tmp_path)
+        # Cursor starts at 0 (=a, default-on). SPACE toggles off, ENTER returns.
+        result = _interactive_checkbox_picker(
+            tmp_path, cands, _read_key_fn=self._keys("SPACE", "ENTER"),
+        )
+        assert result == [b]
+
+    def test_down_then_space_toggles_on_a_non_default(self, tmp_path):
+        a = _make_claude_md(tmp_path / "active")
+        b = _make_git_repo(tmp_path / "plain")  # not default
+        cands = _find_nested_candidates(tmp_path)
+        # cursor 0=active(on); DOWN→1=plain(off); SPACE→on; ENTER.
+        result = _interactive_checkbox_picker(
+            tmp_path, cands,
+            _read_key_fn=self._keys("DOWN", "SPACE", "ENTER"),
+        )
+        assert result == [a, b]
+
+    def test_all_key_selects_everything(self, tmp_path):
+        a = _make_claude_md(tmp_path / "a")
+        b = _make_git_repo(tmp_path / "b")
+        cands = _find_nested_candidates(tmp_path)
+        result = _interactive_checkbox_picker(
+            tmp_path, cands, _read_key_fn=self._keys("ALL", "ENTER"),
+        )
+        assert result == [a, b]
+
+    def test_none_key_deselects_everything(self, tmp_path):
+        _make_claude_md(tmp_path / "a")
+        _make_claude_md(tmp_path / "b")
+        cands = _find_nested_candidates(tmp_path)
+        result = _interactive_checkbox_picker(
+            tmp_path, cands, _read_key_fn=self._keys("NONE", "ENTER"),
+        )
+        assert result == []
+
+    def test_quit_returns_empty(self, tmp_path):
+        _make_claude_md(tmp_path / "a")
+        cands = _find_nested_candidates(tmp_path)
+        result = _interactive_checkbox_picker(
+            tmp_path, cands, _read_key_fn=self._keys("QUIT"),
+        )
+        assert result == []
+
+    def test_up_wraps_around_to_last(self, tmp_path):
+        a = _make_claude_md(tmp_path / "a")
+        _make_claude_md(tmp_path / "b")  # default-on; toggled off via wrap-up
+        cands = _find_nested_candidates(tmp_path)
+        # cursor 0=a; UP wraps to last index (1=b); SPACE toggles off b; ENTER.
+        result = _interactive_checkbox_picker(
+            tmp_path, cands,
+            _read_key_fn=self._keys("UP", "SPACE", "ENTER"),
+        )
+        assert result == [a]
+
+    def test_unknown_key_is_no_op(self, tmp_path):
+        a = _make_claude_md(tmp_path / "a")
+        cands = _find_nested_candidates(tmp_path)
+        # None = unrecognized key from _read_key; should not crash, just loop.
+        result = _interactive_checkbox_picker(
+            tmp_path, cands, _read_key_fn=self._keys(None, "ENTER"),
+        )
+        assert result == [a]
+
+    def test_keyboard_interrupt_returns_empty(self, tmp_path):
+        _make_claude_md(tmp_path / "a")
+        cands = _find_nested_candidates(tmp_path)
+
+        def boom():
+            raise KeyboardInterrupt
+
+        result = _interactive_checkbox_picker(
+            tmp_path, cands, _read_key_fn=boom,
+        )
+        assert result == []
+
+    def test_renders_checkbox_markers_and_cursor(self, tmp_path, capsys):
+        _make_claude_md(tmp_path / "with-signal")
+        _make_git_repo(tmp_path / "no-signal")
+        cands = _find_nested_candidates(tmp_path)
+        _interactive_checkbox_picker(
+            tmp_path, cands, _read_key_fn=self._keys("ENTER"),
+        )
+        err = capsys.readouterr().err
+        assert "[X]" in err          # the pre-selected default
+        assert "[ ]" in err          # the unchecked candidate
+        assert ">" in err            # cursor pointer somewhere
+        assert "Space toggle" in err # help line
+
+
+class TestResolveScanTargetsInteractive:
+    """Routing: TTY + interactive-capable env → interactive picker fires."""
+
+    @staticmethod
+    def _force_interactive(monkeypatch, keys):
+        """Pin routing to the interactive picker with a scripted key stream."""
+        # stdin.isatty must be True for the TTY branch to fire.
+        monkeypatch.setattr("sys.stdin", _fake_tty(""))
+        monkeypatch.setattr(
+            "agent_radar.scanner._can_use_interactive_picker", lambda: True,
+        )
+        it = iter(keys)
+        monkeypatch.setattr(
+            "agent_radar.scanner._read_key", lambda: next(it),
+        )
+
+    def test_tty_routes_to_interactive_picker(self, tmp_path, monkeypatch):
+        a = _make_claude_md(tmp_path / "active")
+        _make_git_repo(tmp_path / "plain")
+        self._force_interactive(monkeypatch, ["ENTER"])
+        assert _resolve_scan_targets(tmp_path) == [a]
+
+    def test_interactive_path_honors_space_toggle(self, tmp_path, monkeypatch):
+        _make_claude_md(tmp_path / "a")  # default-on
+        b = _make_claude_md(tmp_path / "b")  # also default-on
+        self._force_interactive(monkeypatch, ["SPACE", "ENTER"])
+        # SPACE at cursor 0 toggles off "a"; ENTER returns only b.
+        assert _resolve_scan_targets(tmp_path) == [b]

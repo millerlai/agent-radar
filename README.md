@@ -244,31 +244,43 @@ agent-radar report scan.json -o report.html
 
 **Scenario 4 · Run in a repos-parent directory (interactive picker)**
 
-If the path you pass is **not** a git repo but contains scannable
+If the path you pass is **not** itself a Claude Code project (no
+`CLAUDE.md` and no `.claude/` at the top) but contains scannable
 subdirectories (any of `.git/`, `.claude/`, or `CLAUDE.md`), agent-radar
-lists them with checkboxes. Dirs that already show Claude Code signal
-(`CLAUDE.md` or `.claude/`) are **pre-selected**; pure git repos with no
-Claude signal are listed but unchecked, so you decide whether to include
-them:
+opens a keyboard-driven checkbox picker. Dirs that already show Claude
+Code signal (`CLAUDE.md` or `.claude/`) are **pre-selected**; pure git
+repos with no Claude signal are listed but unchecked, so you decide
+whether to include them:
 
 ```text
-[i] /home/you/projects is not a git repo, but contains 4 candidate dirs (2 pre-selected):
-  [*]  1) agent-radar     (CLAUDE.md, .claude/, git)
-  [*]  2) my-project      (CLAUDE.md, git)
-  [ ]  3) sandbox         (git)
-  [ ]  4) website         (git)
-
-  [*] = has Claude Code signal (CLAUDE.md or .claude/)
-Press Enter to scan pre-selected, or type indices ("1,3"), "a" all, "n" none, "q" quit:
+[i] /home/you/projects has 37 candidate dirs (28 selected):
+  > [X] agent-radar              (CLAUDE.md, .claude/, git)
+    [X] ai-hedge-func-claude-cli (CLAUDE.md, .claude/, git)
+    [ ] ai-hedge-fund            (git)
+    [X] auto-package-migration   (CLAUDE.md, .claude/, git)
+    [X] av-video-rename-tool     (CLAUDE.md, .claude/, git)
+       ↓ 32 more below
+  ↑/↓ move | Space toggle | Enter confirm | a all | n none | q quit
 ```
 
-Press Enter to scan only the pre-selected ones, or override with explicit
-indices.
+Keybindings:
+- **↑ / ↓** — move cursor (wraps around)
+- **Space** — toggle checkbox at cursor
+- **Enter** — confirm and scan the currently-selected set
+- **a / n** — select all / select none
+- **q / Esc** — quit without scanning
+- **Ctrl-C** — same as quit
+
+Long lists are paginated to fit your terminal height.
 
 If stdin isn't a TTY (CI, pipes):
 - Dirs with Claude Code signal are auto-scanned (with a summary printed to stderr).
 - If no candidate has any Claude signal, the path is skipped with a warning
   so the user can pass repos explicitly.
+
+On rare platforms without `msvcrt` / `termios` (the picker's only deps —
+both are part of the Python stdlib), agent-radar falls back to a simpler
+text-based picker that accepts comma-separated indices.
 
 ### Add actual-usage measurement (full two-layer analysis)
 
