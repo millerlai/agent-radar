@@ -94,9 +94,45 @@ agent-radar --version   # 例如印出 `agent-radar 0.1.3`
 agent-radar --help
 ```
 
-如果 `--version` 比 [PyPI 最新版](https://pypi.org/project/claude-agent-radar/)
-舊,跑 `pipx upgrade claude-agent-radar` 或 `uv tool upgrade claude-agent-radar`
-升級。
+跟 [PyPI 最新版](https://pypi.org/project/claude-agent-radar/) 對一下;
+落後了就看下方 **升級到最新版**。
+
+### 升級到最新版
+
+本機已經有舊版的話,以下指令會強制拉到 PyPI 上的最新 wheel:
+
+```bash
+# pipx
+pipx upgrade claude-agent-radar
+
+# uv tool — 就地升級
+uv tool install --upgrade claude-agent-radar
+# uv tool — 強制乾淨重裝 (--upgrade 沒拉到、或上游 yank / 重發版時用)
+uv tool install --reinstall claude-agent-radar
+
+# venv 裡的 pip
+pip install --upgrade claude-agent-radar
+```
+
+裝完後再跑一次 `agent-radar --version` 確認。
+
+**一次性「永遠最新版」用 uvx** — 不想長期保留安裝的話,改用 ephemeral 跑:
+
+```bash
+uvx claude-agent-radar@latest --help
+uvx claude-agent-radar@latest scan --include-home . -o scan.json
+```
+
+`@latest` 會繞過 uv resolver cache,確保你不會被卡在舊版本。
+
+**升級後記得刷新內建 skills**。`/agent-radar-coach` 與
+`/agent-radar-feedback` 兩個 skill 雖然包在 wheel 裡,
+但首次安裝時是被複製到 `~/.claude/skills/` 的 ——
+升級套件**不會**自動覆蓋這兩份檔案。請再跑一次:
+
+```bash
+agent-radar install-skill --force
+```
 
 ### 安裝內建 skills (選用,但建議裝)
 

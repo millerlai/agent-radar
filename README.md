@@ -101,8 +101,49 @@ agent-radar --version   # prints e.g. `agent-radar 0.1.3`
 agent-radar --help
 ```
 
-If `--version` looks older than the [latest PyPI release](https://pypi.org/project/claude-agent-radar/),
-upgrade with `pipx upgrade claude-agent-radar` or `uv tool upgrade claude-agent-radar`.
+Compare against the [latest PyPI release](https://pypi.org/project/claude-agent-radar/);
+if you're behind, see **Upgrade to the latest version** below.
+
+### Upgrade to the latest version
+
+If you installed previously, these commands force a refresh to the newest
+published wheel:
+
+```bash
+# pipx
+pipx upgrade claude-agent-radar
+
+# uv tool — upgrade in place
+uv tool install --upgrade claude-agent-radar
+# uv tool — force a clean reinstall (use if --upgrade didn't pick up
+# the newest release, or after a yanked / re-published version)
+uv tool install --reinstall claude-agent-radar
+
+# pip inside a venv
+pip install --upgrade claude-agent-radar
+```
+
+Confirm with `agent-radar --version` afterwards.
+
+**One-shot "always latest" via uvx** — if you'd rather not keep a
+persistent install at all, run it ephemerally:
+
+```bash
+uvx claude-agent-radar@latest --help
+uvx claude-agent-radar@latest scan --include-home . -o scan.json
+```
+
+The `@latest` suffix bypasses uv's resolver cache so you never end up
+pinned to a stale version.
+
+**Refresh the bundled skills after upgrade.** The two skills
+(`/agent-radar-coach`, `/agent-radar-feedback`) ship inside the wheel but
+were copied into `~/.claude/skills/` at first install — upgrading the
+package does **not** overwrite those copies. Re-run:
+
+```bash
+agent-radar install-skill --force
+```
 
 ### Install the bundled skills (optional but recommended)
 
