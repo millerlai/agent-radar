@@ -27,7 +27,7 @@ SUBCOMMANDS: dict[str, tuple[str, str]] = {
     "merge":         ("agent_radar.usage.merge",
                       "Merge scan.json + usage.json into merged.json"),
     "install-skill": ("agent_radar.install_skill",
-                      "Install the /agent-radar-coach Claude Code skill into ~/.claude/skills/"),
+                      "Install the /agent-radar-coach + /agent-radar-feedback skills into ~/.claude/skills/"),
 }
 
 

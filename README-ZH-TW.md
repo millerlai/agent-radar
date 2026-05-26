@@ -98,17 +98,25 @@ agent-radar --help
 舊,跑 `pipx upgrade claude-agent-radar` 或 `uv tool upgrade claude-agent-radar`
 升級。
 
-### 安裝 coach skill (選用,但建議裝)
+### 安裝內建 skills (選用,但建議裝)
 
 ```bash
 agent-radar install-skill
 ```
 
-把內建的 Claude Code skill 複製到 `~/.claude/skills/agent-radar-coach/`。
-在任何 Claude Code session 內叫 `/agent-radar-coach`,
-它會根據你的 scan / session 結果,一次處理一個 gap
-(用實際數據當證據、改之前先問你)。覆蓋舊版加 `--force`,
-裝到別處用 `--dest <dir>`。
+把兩個 Claude Code skill 複製到 `~/.claude/skills/`:
+
+- **`/agent-radar-coach`** — 根據 scan / session / merged 結果一次處理一個
+  gap (用實際數據當證據、改之前先問你)。
+- **`/agent-radar-feedback`** — 把改進迴圈接回**我們**身上。Claude 自己
+  分析 coach skill,草擬一份 *tool-level* 的 `Improvement.MD`
+  (workflow、評分、各 axis playbook 深度、新功能);你用多選 + 自由補充
+  steer 內容;明確同意 send 之後才會用 `gh` 把 GitHub issue 發到
+  [`millerlai/agent-radar`](https://github.com/millerlai/agent-radar/issues)。
+  整份提案是**關於這個工具**,不會包含你的 repo 內容、路徑、或 session
+  資料;若自由補充裡夾帶私人內容,會去識別化後給你再次確認才存檔。
+
+覆蓋舊版加 `--force`,裝到別處用 `--dest <dir>`。
 
 如果 `pipx` / `uv tool install` 成功但 `agent-radar` 還是
 `command not found`,代表 shell 還沒讀到 tool-bin 目錄 ——
@@ -391,6 +399,19 @@ agent-radar merge --help            # scan.json, usage.json, -o
 - session_scanner 只讀本機 JSONL,跨機器需另接 OpenTelemetry。
 - 糾正率僅匹配字面 pattern,語意級糾正偵測不到。
 - 評分權重是可調的啟發式,建議依團隊實況校準後再做跨人比較。
+
+## 回饋
+
+要把 tool-level 的改進建議丟回**我們**身上,最快的方式是
+`/agent-radar-feedback` skill(跟 coach skill 一起,用
+`agent-radar install-skill` 安裝)。Claude 會自己分析 coach skill
+草擬一份 `Improvement.MD`,鎖定 workflow、評分、各 axis playbook 深度、
+功能空缺;你用多選 + 自由補充 steer 內容;明確同意 send 後,直接以
+GitHub issue 發到這個 repo —— **不收集 PII、不傳 repo 內容、不傳
+session 資料**。
+
+當然也可以手動開 issue:
+[github.com/millerlai/agent-radar/issues](https://github.com/millerlai/agent-radar/issues)。
 
 ## 授權
 

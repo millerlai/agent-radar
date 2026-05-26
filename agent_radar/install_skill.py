@@ -1,11 +1,12 @@
 """agent-radar :: agent_radar.install_skill
 ========================================
-Copy the bundled Claude Code skill template into the user's skills directory
-so that ``/agent-radar-coach`` becomes available in any Claude Code session.
+Copy the bundled Claude Code skills into the user's skills directory so
+``/agent-radar-coach`` and ``/agent-radar-feedback`` become available in any
+Claude Code session.
 
-The skill itself lives under ``agent_radar/_skill_template/<skill-name>/`` and
-is shipped as package data inside the wheel. This module just resolves where
-the template is on disk and copies it to ``~/.claude/skills/<skill-name>/``.
+The skill bodies live under ``agent_radar/_skill_template/<skill-name>/`` and
+ship as package data inside the wheel. This module resolves where each
+template is on disk and copies it to ``~/.claude/skills/<skill-name>/``.
 """
 
 from __future__ import annotations
@@ -14,8 +15,10 @@ import argparse
 import shutil
 import sys
 from pathlib import Path
+from typing import List
 
-SKILL_NAME = "agent-radar-coach"
+# Tuple of bundled skills. Order matters for CLI output / install order.
+SKILL_NAMES: tuple = ("agent-radar-coach", "agent-radar-feedback")
 _TEMPLATE_ROOT = Path(__file__).parent / "_skill_template"
 
 
@@ -34,43 +37,56 @@ def _copy_tree(src: Path, dst: Path) -> None:
             shutil.copy2(item, target)
 
 
-def install(dest_root: Path, force: bool = False, dry_run: bool = False) -> Path:
-    """Install ``SKILL_NAME`` into ``<dest_root>/<SKILL_NAME>``.
+def install(dest_root: Path, force: bool = False, dry_run: bool = False) -> List[Path]:
+    """Install every skill in ``SKILL_NAMES`` under ``dest_root``.
 
-    Returns the destination directory. Raises ``FileExistsError`` if the
-    target exists and ``force`` is false.
+    Returns the list of destination directories. Raises ``FileExistsError`` on
+    the first target that already exists when ``force`` is false — so callers
+    get an all-or-nothing install rather than a half-applied state.
     """
-    src = _TEMPLATE_ROOT / SKILL_NAME
-    if not src.is_dir():
-        raise FileNotFoundError(
-            f"skill template missing in this install: {src} "
-            "(reinstall claude-agent-radar)")
+    sources = []
+    for name in SKILL_NAMES:
+        src = _TEMPLATE_ROOT / name
+        if not src.is_dir():
+            raise FileNotFoundError(
+                f"skill template missing in this install: {src} "
+                "(reinstall claude-agent-radar)")
+        sources.append((name, src))
 
-    dst = dest_root / SKILL_NAME
-    if dst.exists() and not force:
-        raise FileExistsError(
-            f"{dst} already exists. Re-run with --force to overwrite.")
+    # Conflict-check ALL targets first so we don't partially install before
+    # erroring on the second skill.
+    targets = []
+    for name, src in sources:
+        dst = dest_root / name
+        if dst.exists() and not force:
+            raise FileExistsError(
+                f"{dst} already exists. Re-run with --force to overwrite.")
+        targets.append((src, dst))
 
     if dry_run:
-        return dst
+        return [dst for _, dst in targets]
 
-    if dst.exists():
-        shutil.rmtree(dst)
-    _copy_tree(src, dst)
-    return dst
+    installed: List[Path] = []
+    for src, dst in targets:
+        if dst.exists():
+            shutil.rmtree(dst)
+        _copy_tree(src, dst)
+        installed.append(dst)
+    return installed
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description=("Install the bundled Claude Code coach skill so "
-                     "/agent-radar-coach is available in any session."))
+        description=("Install the bundled Claude Code skills so "
+                     "/agent-radar-coach and /agent-radar-feedback are "
+                     "available in any session."))
     ap.add_argument(
         "--dest", default=None,
         help=("Skills root directory (default: ~/.claude/skills). "
-              "The skill itself goes in <dest>/agent-radar-coach/."))
+              "Each skill goes in <dest>/<skill-name>/."))
     ap.add_argument(
         "--force", action="store_true",
-        help="Overwrite an existing agent-radar-coach skill at the destination.")
+        help="Overwrite existing skill directories at the destination.")
     ap.add_argument(
         "--dry-run", action="store_true",
         help="Print what would happen without copying.")
@@ -79,7 +95,7 @@ def main() -> int:
     dest_root = Path(args.dest).expanduser().resolve() if args.dest else _default_dest()
 
     try:
-        dst = install(dest_root, force=args.force, dry_run=args.dry_run)
+        installed = install(dest_root, force=args.force, dry_run=args.dry_run)
     except FileExistsError as exc:
         print(f"[err] {exc}", file=sys.stderr)
         return 1
@@ -88,9 +104,12 @@ def main() -> int:
         return 2
 
     verb = "would install" if args.dry_run else "installed"
-    print(f"[ok] {verb} {SKILL_NAME} -> {dst}")
+    for dst in installed:
+        print(f"[ok] {verb} {dst.name} -> {dst}")
     if not args.dry_run:
-        print("     Open any Claude Code session and try:  /agent-radar-coach")
+        print("     Open any Claude Code session and try:")
+        print("       /agent-radar-coach    — diagnose + close gaps")
+        print("       /agent-radar-feedback — share what you learned")
     return 0
 
 

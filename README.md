@@ -104,17 +104,29 @@ agent-radar --help
 If `--version` looks older than the [latest PyPI release](https://pypi.org/project/claude-agent-radar/),
 upgrade with `pipx upgrade claude-agent-radar` or `uv tool upgrade claude-agent-radar`.
 
-### Install the coach skill (optional but recommended)
+### Install the bundled skills (optional but recommended)
 
 ```bash
 agent-radar install-skill
 ```
 
-This copies the bundled Claude Code skill into `~/.claude/skills/agent-radar-coach/`.
-Open any Claude Code session and invoke `/agent-radar-coach` — it walks you
-through your scan / session results and applies targeted fixes one at a time
-(evidence-driven, ask-before-edit). Re-run with `--force` to overwrite an
-existing copy, or `--dest <dir>` to install elsewhere.
+This copies two Claude Code skills into `~/.claude/skills/`:
+
+- **`/agent-radar-coach`** walks you through your `scan` / `session` /
+  `merged` results and applies targeted fixes one at a time
+  (evidence-driven, ask-before-edit).
+- **`/agent-radar-feedback`** closes the loop back to **us**. Claude itself
+  drafts an `Improvement.MD` of *tool-level* suggestions for the coach skill
+  (workflow, scoring, playbook depth, new features), you steer with a
+  multi-select + free-text gate, and — only on your explicit "send" — it
+  files a GitHub issue at
+  [`millerlai/agent-radar`](https://github.com/millerlai/agent-radar/issues).
+  The proposal is about **the tool**, never about your repo content, paths,
+  or session data; any private content in your free-text is redacted and
+  shown back for approval before saving.
+
+Re-run with `--force` to overwrite existing copies, or `--dest <dir>` to
+install elsewhere.
 
 If `pipx` / `uv tool install` succeeded but `agent-radar` is still
 `command not found`, your shell hasn't picked up the tool-bin dir yet
@@ -404,6 +416,19 @@ agent-radar merge --help            # scan.json, usage.json, -o
   corrections (a long explanation of why Claude was wrong) are not detected.
 - The scoring weights are tunable heuristics — calibrate them against your team's
   reality before doing cross-person comparisons.
+
+## Feedback
+
+The fastest way to send tool-level improvements back to us is the
+`/agent-radar-feedback` skill (installed alongside the coach skill via
+`agent-radar install-skill`). It has Claude draft an `Improvement.MD`
+proposal targeting the coach skill's workflow, scoring, playbooks, and
+feature gaps; you steer with a multi-select + free-text gate; it files
+the proposal as a GitHub issue on this repo — **no PII, no repo content,
+no session data leaves your machine**.
+
+You can of course also open issues manually:
+[github.com/millerlai/agent-radar/issues](https://github.com/millerlai/agent-radar/issues).
 
 ## License
 
