@@ -231,28 +231,39 @@ agent-radar report scan.json -o report.html
 
 **情境 4 · 在 repo 父目錄裡跑 (互動選單)**
 
-如果你給的路徑**本身不是 git repo**,但底下有可掃的子目錄
-(包含 `.git/`、`.claude/`、或 `CLAUDE.md` 任一者),agent-radar 會列
-出 checkbox 清單。已有 Claude Code 訊號 (`CLAUDE.md` 或 `.claude/`)
-的子目錄會**預設打勾**;只有 git repo 但沒有 Claude 訊號的就列出來
-但不勾,讓你自己決定要不要納入:
+如果你給的路徑**本身不是 Claude Code 專案** (top-level 沒 `CLAUDE.md`
+也沒 `.claude/`),但底下有可掃的子目錄 (包含 `.git/`、`.claude/`、
+或 `CLAUDE.md` 任一者),agent-radar 會開一個鍵盤控制的 checkbox 選單。
+已有 Claude Code 訊號 (`CLAUDE.md` 或 `.claude/`) 的子目錄**預設打勾**;
+只有 git repo 但沒有 Claude 訊號的就列出來但不勾,讓你自己決定:
 
 ```text
-[i] /home/you/projects is not a git repo, but contains 4 candidate dirs (2 pre-selected):
-  [*]  1) agent-radar     (CLAUDE.md, .claude/, git)
-  [*]  2) my-project      (CLAUDE.md, git)
-  [ ]  3) sandbox         (git)
-  [ ]  4) website         (git)
-
-  [*] = has Claude Code signal (CLAUDE.md or .claude/)
-Press Enter to scan pre-selected, or type indices ("1,3"), "a" all, "n" none, "q" quit:
+[i] /home/you/projects has 37 candidate dirs (28 selected):
+  > [X] agent-radar              (CLAUDE.md, .claude/, git)
+    [X] ai-hedge-func-claude-cli (CLAUDE.md, .claude/, git)
+    [ ] ai-hedge-fund            (git)
+    [X] auto-package-migration   (CLAUDE.md, .claude/, git)
+    [X] av-video-rename-tool     (CLAUDE.md, .claude/, git)
+       ↓ 32 more below
+  ↑/↓ move | Space toggle | Enter confirm | a all | n none | q quit
 ```
 
-按 Enter 就掃預設打勾的;要覆寫就輸入 indices。
+操作:
+- **↑ / ↓** — 移動游標 (上下會循環)
+- **Space** — 切換游標處 checkbox
+- **Enter** — 確認並掃當下勾選的那組
+- **a / n** — 全選 / 全不選
+- **q / Esc** — 不掃,離開
+- **Ctrl-C** — 同上
+
+長清單會依照 terminal 高度自動分頁。
 
 非互動環境 (CI、pipe):
 - 有 Claude 訊號的子目錄會被自動掃 (stderr 印出清單)。
 - 完全沒有 Claude 訊號時,跳過該路徑並提示 user 明確指定。
+
+少數沒有 `msvcrt` / `termios` (兩者都是 Python stdlib) 的平台會 fallback
+到舊版輸入 indices 的 text 選單。
 
 ### 加上實際運用度量測 (完整雙層分析)
 
