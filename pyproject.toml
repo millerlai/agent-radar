@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "claude-agent-radar"
-version = "0.2.1"
+version = "0.2.2"
 description = "AI Agent capability boundary diagnostic — scan Claude Code filesystem fingerprints into six-dimension maturity scores."
 readme = "README.md"
 requires-python = ">=3.8"
