@@ -211,7 +211,7 @@
                 <div class="gap-meta">
                   <span>· configured <b>100</b></span>
                   <span>· activated <b>0</b></span>
-                  <span>· gap <b>+100</b></span>
+                  <span>· gap <b>+100 (100%)</b></span>
                 </div>
               </div>
               <div class="gap-expand-icon" aria-label="Click to expand the underlying configured + activated findings">▾</div>
@@ -264,7 +264,7 @@
                 <div class="gap-meta">
                   <span>· configured <b>70</b></span>
                   <span>· activated <b>19</b></span>
-                  <span>· gap <b>+51</b></span>
+                  <span>· gap <b>+51 (72%)</b></span>
                 </div>
               </div>
               <div class="gap-expand-icon" aria-label="Click to expand the underlying configured + activated findings">▾</div>
@@ -320,78 +320,9 @@
               </div>
             </div>
           </details>
-          <details class="gap-item gap-dir-over">
-            <summary>
-              <div class="gap-rank">3</div>
-              <div class="gap-summary-body">
-                <div class="gap-headline">
-                  <span class="gap-tag gap-tag-over">OVER-ACTIVATED</span>
-                  <span class="gap-axis-name">automation</span>
-                  <span class="gap-target">tradestation-monarch</span>
-                </div>
-                <div class="gap-hint">`tradestation-monarch`: subagent dispatches outpace the configured automation surface. You're using subagents heavily — consider documenting *why* they get dispatched (in CLAUDE.md or subagent descriptions) so the pattern survives future config edits.</div>
-                <div class="gap-meta">
-                  <span>· configured <b>75</b></span>
-                  <span>· activated <b>100</b></span>
-                  <span>· gap <b>-25</b></span>
-                </div>
-              </div>
-              <div class="gap-expand-icon" aria-label="Click to expand the underlying configured + activated findings">▾</div>
-            </summary>
-            <div class="dual-findings">
-              <div class="col">
-                <div class="col-head">CONFIGURED</div>
-                
-      <div class="finding good">
-        <div class="f-head">
-          <span class="f-label">Hooks</span>
-          <span class="f-score">30/30</span>
-        </div>
-        <div class="f-bar"><i style="width:100%"></i></div>
-        <div class="f-detail">Hooks configured</div>
-      </div>
-      <div class="finding good">
-        <div class="f-head">
-          <span class="f-label">Subagents</span>
-          <span class="f-score">30/30</span>
-        </div>
-        <div class="f-bar"><i style="width:100%"></i></div>
-        <div class="f-detail">7 subagent(s)</div>
-      </div>
-      <div class="finding low">
-        <div class="f-head">
-          <span class="f-label">Custom slash commands</span>
-          <span class="f-score">0/25</span>
-        </div>
-        <div class="f-bar"><i style="width:0%"></i></div>
-        <div class="f-detail">No custom commands</div>
-      </div>
-      <div class="finding good">
-        <div class="f-head">
-          <span class="f-label">Plugins</span>
-          <span class="f-score">15/15</span>
-        </div>
-        <div class="f-bar"><i style="width:100%"></i></div>
-        <div class="f-detail">Plugins detected</div>
-      </div>
-              </div>
-              <div class="col">
-                <div class="col-head">ACTIVATED</div>
-                
-      <div class="finding good">
-        <div class="f-head">
-          <span class="f-label">Subagent dispatches</span>
-          <span class="f-score">100/100</span>
-        </div>
-        <div class="f-bar"><i style="width:100%"></i></div>
-        <div class="f-detail">41 subagent dispatch(es) via Agent tool</div>
-      </div>
-              </div>
-            </div>
-          </details>
           <details class="gap-item gap-dir-under">
             <summary>
-              <div class="gap-rank">4</div>
+              <div class="gap-rank">3</div>
               <div class="gap-summary-body">
                 <div class="gap-headline">
                   <span class="gap-tag gap-tag-under">UNDERUSED</span>
@@ -402,7 +333,7 @@
                 <div class="gap-meta">
                   <span>· configured <b>18</b></span>
                   <span>· activated <b>0</b></span>
-                  <span>· gap <b>+18</b></span>
+                  <span>· gap <b>+18 (100%)</b></span>
                 </div>
               </div>
               <div class="gap-expand-icon" aria-label="Click to expand the underlying configured + activated findings">▾</div>
@@ -438,75 +369,6 @@
         </div>
         <div class="f-bar"><i style="width:0%"></i></div>
         <div class="f-detail">MCP server never invoked</div>
-      </div>
-              </div>
-            </div>
-          </details>
-          <details class="gap-item gap-dir-over">
-            <summary>
-              <div class="gap-rank">5</div>
-              <div class="gap-summary-body">
-                <div class="gap-headline">
-                  <span class="gap-tag gap-tag-over">OVER-ACTIVATED</span>
-                  <span class="gap-axis-name">claude_md</span>
-                  <span class="gap-target">tradestation-monarch</span>
-                </div>
-                <div class="gap-hint">`tradestation-monarch`: correction rate is very low even though CLAUDE.md isn't maximally configured. Claude is being guided well by something — either your prompts are unusually clear, or CLAUDE.md is more effective than its configured-coverage score suggests. No action needed.</div>
-                <div class="gap-meta">
-                  <span>· configured <b>84</b></span>
-                  <span>· activated <b>100</b></span>
-                  <span>· gap <b>-16</b></span>
-                </div>
-              </div>
-              <div class="gap-expand-icon" aria-label="Click to expand the underlying configured + activated findings">▾</div>
-            </summary>
-            <div class="dual-findings">
-              <div class="col">
-                <div class="col-head">CONFIGURED</div>
-                
-      <div class="finding good">
-        <div class="f-head">
-          <span class="f-label">CLAUDE.md exists</span>
-          <span class="f-score">50/50</span>
-        </div>
-        <div class="f-bar"><i style="width:100%"></i></div>
-        <div class="f-detail">Found CLAUDE.md, .claude\CLAUDE.md</div>
-      </div>
-      <div class="finding good">
-        <div class="f-head">
-          <span class="f-label">@import references</span>
-          <span class="f-score">10/10</span>
-        </div>
-        <div class="f-bar"><i style="width:100%"></i></div>
-        <div class="f-detail">2 @ reference(s)</div>
-      </div>
-      <div class="finding good">
-        <div class="f-head">
-          <span class="f-label">Lint: file size</span>
-          <span class="f-score">15/15</span>
-        </div>
-        <div class="f-bar"><i style="width:100%"></i></div>
-        <div class="f-detail">6912 chars (within limit)</div>
-      </div>
-      <div class="finding mid">
-        <div class="f-head">
-          <span class="f-label">Iteration evidence</span>
-          <span class="f-score">9/25</span>
-        </div>
-        <div class="f-bar"><i style="width:36%"></i></div>
-        <div class="f-detail">3 git commit(s) on CLAUDE.md; 0 iteration-loop content signal(s) (lessons-learned / do-not-repeat / dated rules)</div>
-      </div>
-              </div>
-              <div class="col">
-                <div class="col-head">ACTIVATED</div>
-                
-      <div class="finding good">
-        <div class="f-head">
-          <span class="f-label">Guidance effectiveness (low correction rate)</span>
-          <span class="f-score">100/100</span>
-        </div>
-        <div class="f-bar"><i style="width:100%"></i></div>
-        <div class="f-detail">0/828 user messages contain corrections (0.0%) — high rate ⇒ CLAUDE.md not guiding</div>
       </div>
               </div>
             </div>
