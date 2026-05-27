@@ -277,36 +277,42 @@ def _read_key():
             raise KeyboardInterrupt
         return None
 
+    import os
     import select
     import termios
     import tty
+    # Read directly from the fd, not sys.stdin: TextIOWrapper buffers ahead,
+    # and select() only sees kernel-level readiness — so an ESC-[A sequence
+    # gets the "[A" swallowed into Python's buffer, select reports no data,
+    # and the ESC alone looked like a quit. os.read bypasses that buffer.
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
         tty.setraw(fd)
-        ch = sys.stdin.read(1)
-        if ch == "\x1b":
+        ch = os.read(fd, 1)
+        if ch == b"\x1b":
             # Could be ESC alone or the start of CSI (arrow keys: ESC [ A/B).
-            # Use a tiny non-blocking peek for the continuation.
-            if select.select([sys.stdin], [], [], 0.05)[0]:
-                seq = sys.stdin.read(2)
-                if seq == "[A":
+            # 100ms is generous for local TTYs and tolerant of slow SSH/IDE
+            # terminals where the continuation bytes lag the ESC.
+            if select.select([fd], [], [], 0.1)[0]:
+                seq = os.read(fd, 2)
+                if seq == b"[A":
                     return "UP"
-                if seq == "[B":
+                if seq == b"[B":
                     return "DOWN"
                 return None
             return "QUIT"
-        if ch in ("\r", "\n"):
+        if ch in (b"\r", b"\n"):
             return "ENTER"
-        if ch == " ":
+        if ch == b" ":
             return "SPACE"
-        if ch in ("q", "Q"):
+        if ch in (b"q", b"Q"):
             return "QUIT"
-        if ch in ("a", "A"):
+        if ch in (b"a", b"A"):
             return "ALL"
-        if ch in ("n", "N"):
+        if ch in (b"n", b"N"):
             return "NONE"
-        if ch == "\x03":
+        if ch == b"\x03":
             raise KeyboardInterrupt
         return None
     finally:
